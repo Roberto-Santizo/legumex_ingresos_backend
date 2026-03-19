@@ -5,6 +5,7 @@ import VisitorPerson from "./VisitorPerson.model";
 import Department from "./Department.model";
 import Agent from "./Agent.model";
 import VisitCompanion from "./VisitCompanion.model";
+import User from "./User.model";
 
 @Table({
     tableName: 'visit',
@@ -102,4 +103,14 @@ export default class Visit extends Model {
 
     @BelongsTo(() => Agent)
     agent: Agent
+
+    @ForeignKey(() => User)
+    @Column({
+        type: DataType.INTEGER,
+        allowNull: true,
+    })
+    declare created_by: number
+
+    @BelongsTo(() => User, 'created_by')
+    created_by_user: User
 }

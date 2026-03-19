@@ -11,35 +11,62 @@ import {
     checkOut,
     cancelVisit,
 } from "../handlers/visit"
+import { validateJWT, checkPermission } from "../middleware/jwt"
 
 const router = Router()
 
 // Rutas específicas primero (antes de /:id para evitar conflictos)
-router.get("/today", getVisitsToday)
-router.get("/active", getVisitsActive)
+router.get("/today",
+    validateJWT,
+    checkPermission('visits:view'),
+    getVisitsToday
+)
 
-router.post("/", createVisit)
-router.get("/", getVisits)
+router.get("/active",
+    validateJWT,
+    checkPermission('visits:view'),
+    getVisitsActive
+)
+
+router.post("/",
+    validateJWT,
+    checkPermission('visits:create'),
+    createVisit
+)
+
+router.get("/",
+    validateJWT,
+    checkPermission('visits:view'),
+    getVisits
+)
 
 router.get("/:id",
+    validateJWT,
+    checkPermission('visits:view'),
     param("id").isInt().withMessage("Id no válido"),
     handleInputErrors,
     getVisitById
 )
 
 router.patch("/:id/checkin",
+    validateJWT,
+    checkPermission('visits:checkin'),
     param("id").isInt().withMessage("Id no válido"),
     handleInputErrors,
     checkIn
 )
 
 router.patch("/:id/checkout",
+    validateJWT,
+    checkPermission('visits:checkout'),
     param("id").isInt().withMessage("Id no válido"),
     handleInputErrors,
     checkOut
 )
 
 router.patch("/:id/cancel",
+    validateJWT,
+    checkPermission('visits:cancel'),
     param("id").isInt().withMessage("Id no válido"),
     handleInputErrors,
     cancelVisit

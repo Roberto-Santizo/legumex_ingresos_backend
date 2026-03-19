@@ -22,13 +22,24 @@ const includeRelations = [
     },
 ]
 
-// Phase 1 - Schedule visit: only the visitor (company) and date are required
+// Phase 1 - Schedule visit: visitor (company), person and date are required
 export const createVisit = async (req: Request, res: Response) => {
     try {
-        const { visitor_id, date, department_id, responsible_person, destination } = req.body
+        const { visitor_id, visitor_person_id, date, department_id, responsible_person, destination, companions } = req.body
 
         if (!visitor_id || !date || !department_id || !responsible_person || !destination) {
             return res.status(400).json({ message: "Faltan campos requeridos: visitor_id, date, department_id, responsible_person, destination" })
+        }
+
+        if (Array.isArray(companions) && companions.length > 0) {
+            const isMainAlsoCompanion = companions.some((c: { visitor_person_id: number }) => c.visitor_person_id === visitor_person_id)
+            if (isMainAlsoCompanion) {
+                return res.status(400).json({ message: "La persona principal no puede ser también acompañante" })
+            }
+            const ids = companions.map((c: { visitor_person_id: number }) => c.visitor_person_id)
+            if (new Set(ids).size !== ids.length) {
+                return res.status(400).json({ message: "Hay personas duplicadas en los acompañantes" })
+            }
         }
 
         const status = await VisitStatus.findOne({ where: { name: 'PROGRAMADA' } })
@@ -36,26 +47,47 @@ export const createVisit = async (req: Request, res: Response) => {
             return res.status(500).json({ message: "Estado 'PROGRAMADA' no encontrado. Verifique los estados de visita." })
         }
 
-        const visit = await Visit.create({
-            visitor_id,
-            date,
-            department_id,
-            responsible_person,
-            destination,
-            visit_status_id: status.id,
-        })
+        const transaction = await db.transaction()
+        try {
+            const visit = await Visit.create({
+                visitor_id,
+                visitor_person_id,
+                date,
+                department_id,
+                responsible_person,
+                destination,
+                visit_status_id: status.id,
+                created_by: req.user!.id,
+            }, { transaction })
 
-        return res.status(201).json({ message: "Cita programada correctamente", data: visit })
+            if (Array.isArray(companions) && companions.length > 0) {
+                const companionRecords = companions.map((c: { visitor_person_id: number }) => ({
+                    visit_id: visit.id,
+                    visitor_person_id: c.visitor_person_id,
+                }))
+                await VisitCompanion.bulkCreate(companionRecords, { transaction })
+            }
+
+            if (transaction) await transaction.commit()
+            return res.status(201).json({ message: "Cita programada correctamente", data: visit })
+        } catch (txError: any) {
+            if (transaction) await transaction.rollback()
+            console.error("Error en createVisit transaction:", txError)
+            return res.status(500).json({ message: "Error al programar la cita", detail: txError?.message })
+        }
     } catch (error) {
         console.log(error)
         return res.status(500).json({ message: "Error al programar la cita" })
     }
 }
 
-// Get all visits with optional filters ?date=YYYY-MM-DD&status=PROGRAMADA
+// Get all visits with optional filters ?date=YYYY-MM-DD&status=PROGRAMADA&page=1&limit=10
 export const getVisits = async (req: Request, res: Response) => {
     try {
         const { date, status } = req.query
+        const page = parseInt(req.query.page as string) || 1
+        const limit = parseInt(req.query.limit as string) || 10
+        const offset = (page - 1) * limit
         const where: Record<string, any> = {}
 
         if (date) {
@@ -69,13 +101,30 @@ export const getVisits = async (req: Request, res: Response) => {
             if (visitStatus) where.visit_status_id = visitStatus.id
         }
 
-        const visits = await Visit.findAll({
+        // Si no tiene visits:view:all, solo ve las visitas que él creó
+        const canViewAll = req.user!.permissions.includes('visits:view:all')
+        if (!canViewAll) {
+            where.created_by = req.user!.id
+        }
+
+        const { count, rows } = await Visit.findAndCountAll({
             where,
             include: includeRelations,
-            order: [['date', 'DESC']],
+            order: [['createdAt', 'DESC']],
+            limit,
+            offset,
         })
 
-        return res.status(200).json({ data: visits })
+        const lastPage = Math.ceil(count / limit)
+
+        return res.status(200).json({
+            statusCode: 200,
+            response: rows,
+            total: count,
+            page,
+            lastPage,
+            limit,
+        })
     } catch (error) {
         console.log(error)
         return res.status(500).json({ message: "Error al obtener las visitas" })
@@ -135,12 +184,15 @@ export const getVisitById = async (req: Request, res: Response) => {
     }
 }
 
-// Phase 2 - Check-in: agent confirms who arrived and registers entry
-// Body: { visitor_person_id, entry_time, badge_number, agent_id, companions?: [{ visitor_person_id, badge_number }] }
+// Phase 2 - Check-in: agent registers entry time and assigns badge numbers
+// Body: { entry_time, badge_number, agent_id, companions?: [{ badge_number }] }
+// visitor_person_id and companions persons are already set from createVisit
 export const checkIn = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
-        const visit = await Visit.findByPk(+id)
+        const visit = await Visit.findByPk(+id, {
+            include: [{ model: VisitCompanion, as: 'visit_companions' }],
+        })
         if (!visit) {
             return res.status(404).json({ message: "Visita no encontrada" })
         }
@@ -151,49 +203,45 @@ export const checkIn = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Solo se puede registrar el ingreso de visitas en estado PROGRAMADA" })
         }
 
-        const { visitor_person_id, entry_time, badge_number, agent_id, companions } = req.body
+        const { entry_time, badge_number, agent_id, companions } = req.body
+        const visitor_person_id = visit.visitor_person_id ?? req.body.visitor_person_id
 
-        if (!visitor_person_id || !entry_time || !badge_number || !agent_id) {
-            return res.status(400).json({ message: "Faltan campos requeridos: visitor_person_id, entry_time, badge_number, agent_id" })
+        if (!entry_time || !badge_number || !agent_id) {
+            return res.status(400).json({ message: "Faltan campos requeridos: entry_time, badge_number, agent_id" })
         }
 
-        // Validate companions is a valid array if provided
         if (companions !== undefined && !Array.isArray(companions)) {
-            return res.status(400).json({ message: "El campo companions debe ser un arreglo" })
+            return res.status(400).json({ message: "companions debe ser un arreglo" })
         }
 
-        if (Array.isArray(companions)) {
-            for (const companion of companions) {
-                if (!companion.visitor_person_id || !companion.badge_number) {
-                    return res.status(400).json({ message: "Cada acompañante debe tener visitor_person_id y badge_number" })
-                }
-            }
+        const existingCompanions = ((visit as any).visit_companions as VisitCompanion[]) ?? []
 
-            // A person cannot be both the main visitor and a companion
-            const mainVisitorIsAlsoCompanion = companions.some(
-                (companion: { visitor_person_id: number }) => companion.visitor_person_id === visitor_person_id
-            )
-            if (mainVisitorIsAlsoCompanion) {
-                const mainPerson = await VisitorPerson.findByPk(visitor_person_id, { attributes: ['name', 'document_number'] })
+        if (Array.isArray(companions) && companions.length > 0 && visitor_person_id !== undefined) {
+            const isMainAlsoCompanion = companions.some((c: any) => c.visitor_person_id === visitor_person_id)
+            if (isMainAlsoCompanion) {
                 return res.status(400).json({
-                    message: `${mainPerson?.name ?? 'El visitante principal'} (DPI: ${mainPerson?.document_number ?? visitor_person_id}) está registrado como visitante principal y también como acompañante. Una persona solo puede tener un rol por visita.`,
+                    message: "La persona principal no puede ser también acompañante",
                     code: 'PERSON_DUPLICATE_ROLE',
                 })
             }
+        }
 
-            // Companions cannot be duplicated among themselves
-            const companionPersonIds = companions.map((companion: { visitor_person_id: number }) => companion.visitor_person_id)
-            const uniquePersonIds = new Set(companionPersonIds)
-            if (uniquePersonIds.size !== companionPersonIds.length) {
-                return res.status(400).json({
-                    message: 'Hay acompañantes duplicados en la lista. Cada persona solo puede aparecer una vez.',
-                    code: 'DUPLICATE_COMPANIONS',
-                })
+        // Validate badge_number for each existing companion
+        if (existingCompanions.length > 0) {
+            if (!Array.isArray(companions) || companions.length !== existingCompanions.length) {
+                return res.status(400).json({ message: "Debe enviar badge_number para cada acompañante de la visita" })
             }
+            for (const c of companions) {
+                if (!c.badge_number) {
+                    return res.status(400).json({ message: "Cada acompañante debe tener badge_number" })
+                }
+            }
+        }
 
-            // Badge numbers must be unique across main visitor and all companions
-            const allBadgeNumbers = [badge_number, ...companions.map((companion: { badge_number: string }) => companion.badge_number)]
-            const duplicateBadges = allBadgeNumbers.filter((badgeNumber, index) => allBadgeNumbers.indexOf(badgeNumber) !== index)
+        // Badge numbers must be unique across main visitor and all companions
+        if (Array.isArray(companions) && companions.length > 0) {
+            const allBadgeNumbers = [badge_number, ...companions.map((c: { badge_number: string }) => c.badge_number)]
+            const duplicateBadges = allBadgeNumbers.filter((b, i) => allBadgeNumbers.indexOf(b) !== i)
             if (duplicateBadges.length > 0) {
                 return res.status(400).json({
                     message: `El carnet ${duplicateBadges[0]} esta asignado a mas de una persona. Cada visitante debe tener un carnet diferente. Verifique los carnets ingresados.`,
@@ -227,44 +275,39 @@ export const checkIn = async (req: Request, res: Response) => {
         }
 
         // Check that no companion is currently inside the plant
-        if (Array.isArray(companions) && companions.length > 0) {
-            for (const companion of companions) {
-                const companionInPlant = await VisitCompanion.findOne({
-                    where: { visitor_person_id: companion.visitor_person_id },
-                    include: [{
-                        model: Visit,
-                        as: 'visit',
-                        where: { visit_status_id: enPlantaStatus.id },
-                        attributes: ['id'],
-                    }],
+        for (const companion of existingCompanions) {
+            const companionInPlant = await VisitCompanion.findOne({
+                where: { visitor_person_id: companion.visitor_person_id },
+                include: [{
+                    model: Visit,
+                    as: 'visit',
+                    where: { visit_status_id: enPlantaStatus.id },
+                    attributes: ['id'],
+                }],
+            })
+            if (companionInPlant) {
+                const companionPerson = await VisitorPerson.findByPk(companion.visitor_person_id, { attributes: ['name', 'document_number'] })
+                return res.status(409).json({
+                    message: `Verifique: ${companionPerson?.name ?? 'Un acompañante'} (DPI: ${companionPerson?.document_number ?? companion.visitor_person_id}) actualmente se encuentra en planta. No puede ingresar hasta que finalice su visita activa.`,
+                    code: 'COMPANION_ALREADY_IN_PLANT',
                 })
-                if (companionInPlant) {
-                    const companionPerson = await VisitorPerson.findByPk(companion.visitor_person_id, { attributes: ['name', 'document_number'] })
-                    return res.status(409).json({
-                        message: `Verifique: ${companionPerson?.name ?? 'Un acompañante'} (DPI: ${companionPerson?.document_number ?? companion.visitor_person_id}) actualmente se encuentra en planta. No puede ingresar hasta que finalice su visita activa.`,
-                        code: 'COMPANION_ALREADY_IN_PLANT',
-                    })
-                }
             }
         }
 
         const transaction = await db.transaction()
         try {
             await visit.update({
-                visitor_person_id,
                 entry_time,
                 badge_number,
                 agent_id,
                 visit_status_id: enPlantaStatus.id,
             }, { transaction })
 
+            // Update badge_number on existing companions (matched by index/order)
             if (Array.isArray(companions) && companions.length > 0) {
-                const companionRecords = companions.map((c: { visitor_person_id: number; badge_number: string }) => ({
-                    visit_id: visit.id,
-                    visitor_person_id: c.visitor_person_id,
-                    badge_number: c.badge_number,
-                }))
-                await VisitCompanion.bulkCreate(companionRecords, { transaction })
+                for (let i = 0; i < existingCompanions.length; i++) {
+                    await existingCompanions[i].update({ badge_number: companions[i].badge_number }, { transaction })
+                }
             }
 
             await transaction.commit()

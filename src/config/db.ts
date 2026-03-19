@@ -12,11 +12,13 @@ import Companion from '../models/Companion.model'
 import VisitCompanion from '../models/VisitCompanion.model'
 import Visitor from '../models/Visitor.model'
 import VisitorPerson from '../models/VisitorPerson.model'
+import Permission from '../models/Permission.model'
+import RolePermission from '../models/RolePermission.model'
 
 dotenv.config()
 
 const db = new Sequelize(process.env.DATABASE_URL!,{
-    models:[Role, User, Department, People, Company, Agent, VisitStatus, Visit, Companion, VisitCompanion, Visitor, VisitorPerson],
+    models:[Role, User, Department, People, Company, Agent, VisitStatus, Visit, Companion, VisitCompanion, Visitor, VisitorPerson, Permission, RolePermission],
     logging: false
 })
 

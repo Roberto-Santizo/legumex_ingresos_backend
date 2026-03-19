@@ -2,8 +2,11 @@ import { Router } from "express"
 import { body, param } from "express-validator"
 import { handleInputErrors } from "../middleware"
 import { createVisitCompanion, getVisitCompanions, getVisitCompanionById, deleteVisitCompanion } from "../handlers/visitCompanion"
+import { validateJWT } from "../middleware/jwt"
 
 const router = Router()
+
+router.use(validateJWT)
 
 router.post("/",
     body("visit_id").notEmpty().isInt().withMessage("visit_id es requerido y debe ser un número"),

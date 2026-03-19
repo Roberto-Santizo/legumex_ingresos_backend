@@ -6,6 +6,7 @@ export interface JwtPayload {
     name: string
     username: string
     role: string
+    permissions: string[]
 }
 
 declare global {
@@ -31,5 +32,15 @@ export const validateJWT = (req: Request, res: Response, next: NextFunction) => 
         next()
     } catch {
         return res.status(401).json({ statusCode: 401, message: "Token inválido o expirado" })
+    }
+}
+
+export const checkPermission = (permission: string) => {
+    return (req: Request, res: Response, next: NextFunction) => {
+        const permissions: string[] = req.user?.permissions ?? []
+        if (!permissions.includes(permission)) {
+            return res.status(403).json({ statusCode: 403, message: "No tienes permiso para realizar esta acción" })
+        }
+        next()
     }
 }

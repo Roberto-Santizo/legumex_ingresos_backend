@@ -9,8 +9,11 @@ import {
     updateVisitorPerson,
     deleteVisitorPerson,
 } from "../handlers/visitorPerson"
+import { validateJWT } from "../middleware/jwt"
 
 const router = Router()
+
+router.use(validateJWT)
 
 router.post("/",
     body("visitor_id").notEmpty().isInt().withMessage("visitor_id es requerido"),

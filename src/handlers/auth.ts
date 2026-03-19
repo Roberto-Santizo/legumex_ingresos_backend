@@ -3,6 +3,7 @@ import bcrypt from "bcrypt"
 import jwt from "jsonwebtoken"
 import User from "../models/User.model"
 import Role from "../models/Role.model"
+import Permission from "../models/Permission.model"
 import { JwtPayload } from "../middleware/jwt"
 
 const generateToken = (payload: JwtPayload): string => {
@@ -17,7 +18,10 @@ export const login = async (req: Request, res: Response) => {
 
         const user = await User.findOne({
             where: { username },
-            include: [{ model: Role }]
+            include: [{
+                model: Role,
+                include: [{ model: Permission }]
+            }]
         })
 
         if (!user) {
@@ -29,13 +33,16 @@ export const login = async (req: Request, res: Response) => {
             return res.status(401).json({ message: "Credenciales inválidas" })
         }
 
-        const roleName: string = (user as any).role?.name ?? "unknown"
+        const role = (user as any).role
+        const roleName: string = role?.name ?? "unknown"
+        const permissions: string[] = (role?.permissions ?? []).map((p: Permission) => p.name)
 
         const payload: JwtPayload = {
             id: user.id,
             name: user.name,
             username: user.username,
-            role: roleName
+            role: roleName,
+            permissions
         }
 
         const token = generateToken(payload)
@@ -47,10 +54,34 @@ export const login = async (req: Request, res: Response) => {
     }
 }
 
-export const checkStatus = (req: Request, res: Response) => {
-    const { id, name, username, role } = req.user!
+export const checkStatus = async (req: Request, res: Response) => {
+    const { id } = req.user!
 
-    const token = generateToken({ id, name, username, role })
+    // Re-fetch fresh permissions from DB in case they changed
+    const user = await User.findByPk(id, {
+        include: [{
+            model: Role,
+            include: [{ model: Permission }]
+        }]
+    })
 
-    return res.status(200).json({ data: { id, name, username, role }, token })
+    if (!user) {
+        return res.status(401).json({ message: "Usuario no encontrado" })
+    }
+
+    const role = (user as any).role
+    const roleName: string = role?.name ?? "unknown"
+    const permissions: string[] = (role?.permissions ?? []).map((p: Permission) => p.name)
+
+    const freshPayload: JwtPayload = {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        role: roleName,
+        permissions
+    }
+
+    const token = generateToken(freshPayload)
+
+    return res.status(200).json({ data: freshPayload, token })
 }

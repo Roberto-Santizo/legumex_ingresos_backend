@@ -30,7 +30,7 @@ export default class People extends Model {
     declare document_number: string
 
     @Column({
-        type: DataType.TEXT('long'),
+        type: DataType.TEXT,
     })
     declare document_photo: string
 
@@ -40,7 +40,7 @@ export default class People extends Model {
     declare license_number: string
     
     @Column({
-        type: DataType.TEXT('long'),
+        type: DataType.TEXT,
     })
     declare license_photo: string
 }

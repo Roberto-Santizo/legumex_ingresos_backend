@@ -20,7 +20,7 @@ export default class Companion extends Model {
     declare document_number: string
 
     @Column({
-        type: DataType.TEXT('long'),
+        type: DataType.TEXT,
         allowNull: true,
     })
     declare document_photo: string
@@ -32,7 +32,7 @@ export default class Companion extends Model {
     declare license_number: string
 
     @Column({
-        type: DataType.TEXT('long'),
+        type: DataType.TEXT,
         allowNull: true,
     })
     declare license_photo: string
