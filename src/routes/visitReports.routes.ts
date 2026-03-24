@@ -4,6 +4,7 @@ import {
     getInPlantAt,
     getVisitsByCompany,
 } from "../handlers/visitReports"
+import { getVisitsExcelReport } from "../handlers/visitReportsExcel"
 import { validateJWT, checkPermission } from "../middleware/jwt"
 
 const router = Router()
@@ -27,6 +28,14 @@ router.get("/visits-by-company",
     validateJWT,
     checkPermission('reports:view'),
     getVisitsByCompany
+)
+
+// Excel Report - GET /api/reports/excel?from=YYYY-MM-DD&to=YYYY-MM-DDo
+// Downloads a .xlsx file with all visits in the given date range
+router.get("/excel",
+    validateJWT,
+    checkPermission('reports:view'),
+    getVisitsExcelReport
 )
 
 export default router

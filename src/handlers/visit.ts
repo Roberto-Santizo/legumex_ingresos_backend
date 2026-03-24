@@ -359,6 +359,101 @@ export const checkOut = async (req: Request, res: Response) => {
     }
 }
 
+// Update visit (only when PROGRAMADA) - edit fields and replace companions list
+export const updateVisit = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params
+        const visit = await Visit.findByPk(+id, {
+            include: [{ model: VisitCompanion, as: 'visit_companions' }],
+        })
+        if (!visit) {
+            return res.status(404).json({ message: "Visita no encontrada" })
+        }
+
+        const programadaStatus = await VisitStatus.findOne({ where: { name: 'PROGRAMADA' } })
+        if (!programadaStatus || visit.visit_status_id !== programadaStatus.id) {
+            return res.status(400).json({ message: "Solo se pueden editar visitas en estado PROGRAMADA" })
+        }
+
+        const { visitor_id, visitor_person_id, date, department_id, responsible_person, destination, companions } = req.body
+
+        if (Array.isArray(companions)) {
+            const companionIds = companions.map((c: { visitor_person_id: number }) => c.visitor_person_id)
+            // Use new visitor_person_id if provided, otherwise keep existing
+            const mainPersonId = visitor_person_id ?? visit.visitor_person_id
+            if (mainPersonId != null && companionIds.includes(mainPersonId)) {
+                return res.status(400).json({ message: "La persona principal no puede ser también acompañante" })
+            }
+            if (new Set(companionIds).size !== companionIds.length) {
+                return res.status(400).json({ message: "Hay personas duplicadas en los acompañantes" })
+            }
+        }
+
+        const transaction = await db.transaction()
+        try {
+            const updateData: Record<string, any> = {}
+            if (visitor_id !== undefined)         updateData.visitor_id = visitor_id
+            if (visitor_person_id !== undefined)  updateData.visitor_person_id = visitor_person_id
+            if (date !== undefined)               updateData.date = date
+            if (department_id !== undefined)      updateData.department_id = department_id
+            if (responsible_person !== undefined) updateData.responsible_person = responsible_person
+            if (destination !== undefined)        updateData.destination = destination
+
+            if (Object.keys(updateData).length > 0) {
+                await visit.update(updateData, { transaction })
+            }
+
+            // Replace entire companions list when provided
+            if (Array.isArray(companions)) {
+                await VisitCompanion.destroy({ where: { visit_id: visit.id }, transaction })
+                if (companions.length > 0) {
+                    const companionRecords = companions.map((c: { visitor_person_id: number }) => ({
+                        visit_id: visit.id,
+                        visitor_person_id: c.visitor_person_id,
+                    }))
+                    await VisitCompanion.bulkCreate(companionRecords, { transaction })
+                }
+            }
+
+            await transaction.commit()
+        } catch (txError: any) {
+            await transaction.rollback()
+            console.error("Error en updateVisit transaction:", txError)
+            return res.status(500).json({ message: "Error al actualizar la visita", detail: txError?.message })
+        }
+
+        const updatedVisit = await Visit.findByPk(+id, { include: includeRelations })
+        return res.status(200).json({ message: "Visita actualizada correctamente", data: updatedVisit })
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({ message: "Error al actualizar la visita" })
+    }
+}
+
+// Delete visit (only when PROGRAMADA - not yet entered the plant)
+export const deleteVisit = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params
+        const visit = await Visit.findByPk(+id)
+        if (!visit) {
+            return res.status(404).json({ message: "Visita no encontrada" })
+        }
+
+        const programadaStatus = await VisitStatus.findOne({ where: { name: 'PROGRAMADA' } })
+        if (!programadaStatus || visit.visit_status_id !== programadaStatus.id) {
+            return res.status(400).json({ message: "Solo se pueden eliminar visitas en estado PROGRAMADA. Una visita que ya ingresó a planta no puede eliminarse." })
+        }
+
+        await VisitCompanion.destroy({ where: { visit_id: visit.id } })
+        await visit.destroy()
+
+        return res.status(200).json({ message: "Visita eliminada correctamente" })
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({ message: "Error al eliminar la visita" })
+    }
+}
+
 // Cancel visit
 export const cancelVisit = async (req: Request, res: Response) => {
     try {

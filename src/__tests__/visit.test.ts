@@ -22,7 +22,7 @@ jest.mock('../config/db', () => ({
 
 jest.mock('../models/Visit.model', () => ({
     __esModule: true,
-    default: { create: jest.fn(), findAll: jest.fn(), findOne: jest.fn(), findByPk: jest.fn() },
+    default: { create: jest.fn(), findAll: jest.fn(), findAndCountAll: jest.fn(), findOne: jest.fn(), findByPk: jest.fn() },
 }))
 
 jest.mock('../models/Visit_status.model', () => ({
@@ -156,30 +156,30 @@ describe('getVisits', () => {
     it('returns the list of visits → 200', async () => {
         // Arrange: the DB returns three visits.
         const mockVisits = [{ id: 1 }, { id: 2 }, { id: 3 }]
-        ;(Visit.findAll as jest.Mock).mockResolvedValue(mockVisits)
+        ;(Visit.findAndCountAll as jest.Mock).mockResolvedValue({ count: 3, rows: mockVisits })
 
         // Act: admin user has visits:view:all so no extra filtering is applied.
         const r = res()
         await getVisits(req() as Request, r as unknown as Response)
 
-        // Assert: 200 and the exact array the DB returned.
+        // Assert: 200 and the paginated response the handler returns.
         expect(r.status).toHaveBeenCalledWith(200)
-        expect(r.json).toHaveBeenCalledWith({ data: mockVisits })
+        expect(r.json).toHaveBeenCalledWith({ statusCode: 200, response: mockVisits, total: 3, page: 1, lastPage: 1, limit: 10 })
     })
 
     it('without visits:view:all permission only returns own visits', async () => {
         // Arrange: create a user that only has the basic visits:view permission
         // (not the 'all' variant), so the handler must add a created_by filter.
         const limitedUser = { ...adminUser, permissions: ['visits:view'] }
-        ;(Visit.findAll as jest.Mock).mockResolvedValue([])
+        ;(Visit.findAndCountAll as jest.Mock).mockResolvedValue({ count: 0, rows: [] })
 
         // Act
         const r = res()
         await getVisits(req({ user: limitedUser }) as Request, r as unknown as Response)
 
-        // Assert: inspect the actual arguments passed to Visit.findAll
+        // Assert: inspect the actual arguments passed to Visit.findAndCountAll
         // and confirm the where clause includes created_by: 1 (the user's id).
-        const callArgs = (Visit.findAll as jest.Mock).mock.calls[0][0]
+        const callArgs = (Visit.findAndCountAll as jest.Mock).mock.calls[0][0]
         expect(callArgs.where).toHaveProperty('created_by', 1)
     })
 
@@ -188,15 +188,15 @@ describe('getVisits', () => {
         // The handler first resolves the name to a DB row, then uses
         // its id to filter.
         ;(VisitStatus.findOne as jest.Mock).mockResolvedValue({ id: 1, name: 'PROGRAMADA' })
-        ;(Visit.findAll as jest.Mock).mockResolvedValue([])
+        ;(Visit.findAndCountAll as jest.Mock).mockResolvedValue({ count: 0, rows: [] })
 
         // Act
         const r = res()
         await getVisits(req({ query: { status: 'PROGRAMADA' } }) as Request, r as unknown as Response)
 
-        // Assert: Visit.findAll must have been called with visit_status_id: 1
+        // Assert: Visit.findAndCountAll must have been called with visit_status_id: 1
         // in the where clause — not with the raw string 'PROGRAMADA'.
-        const callArgs = (Visit.findAll as jest.Mock).mock.calls[0][0]
+        const callArgs = (Visit.findAndCountAll as jest.Mock).mock.calls[0][0]
         expect(callArgs.where).toHaveProperty('visit_status_id', 1)
     })
 })

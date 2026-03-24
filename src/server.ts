@@ -46,6 +46,8 @@ const PERMISSIONS = [
     { name: 'visits:checkin',     description: 'Registrar entrada de visitas' },
     { name: 'visits:checkout',    description: 'Registrar salida de visitas' },
     { name: 'visits:cancel',      description: 'Cancelar visitas' },
+    { name: 'visits:edit',        description: 'Editar visitas programadas' },
+    { name: 'visits:delete',      description: 'Eliminar visitas programadas' },
     { name: 'reports:view',       description: 'Ver reportes' },
 ]
 

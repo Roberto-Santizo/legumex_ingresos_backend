@@ -3,6 +3,8 @@ import { param } from "express-validator"
 import { handleInputErrors } from "../middleware"
 import {
     createVisit,
+    updateVisit,
+    deleteVisit,
     getVisits,
     getVisitsToday,
     getVisitsActive,
@@ -70,6 +72,22 @@ router.patch("/:id/cancel",
     param("id").isInt().withMessage("Id no válido"),
     handleInputErrors,
     cancelVisit
+)
+
+router.patch("/:id",
+    validateJWT,
+    checkPermission('visits:edit'),
+    param("id").isInt().withMessage("Id no válido"),
+    handleInputErrors,
+    updateVisit
+)
+
+router.delete("/:id",
+    validateJWT,
+    checkPermission('visits:delete'),
+    param("id").isInt().withMessage("Id no válido"),
+    handleInputErrors,
+    deleteVisit
 )
 
 export default router

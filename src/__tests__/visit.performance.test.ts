@@ -12,7 +12,7 @@
 // ── Mocks ──────────────────────────────────────────────────────────────────────
 
 jest.mock('../config/db', () => ({ __esModule: true, default: { transaction: jest.fn() } }))
-jest.mock('../models/Visit.model',         () => ({ __esModule: true, default: { findAll: jest.fn(), findByPk: jest.fn(), findOne: jest.fn() } }))
+jest.mock('../models/Visit.model',         () => ({ __esModule: true, default: { findAll: jest.fn(), findAndCountAll: jest.fn(), findByPk: jest.fn(), findOne: jest.fn() } }))
 jest.mock('../models/Visit_status.model',  () => ({ __esModule: true, default: { findOne: jest.fn() } }))
 jest.mock('../models/VisitCompanion.model', () => ({ __esModule: true, default: {} }))
 jest.mock('../models/VisitorPerson.model', () => ({ __esModule: true, default: {} }))
@@ -88,7 +88,7 @@ describe('Performance – getVisits', () => {
         [1000, 'high load'],
     ])('with %d records (%s) responds in < ' + THRESHOLD_MS + 'ms', async (count) => {
         const dataset = Array.from({ length: count }, (_, i) => makeVisit(i + 1))
-        ;(Visit.findAll as jest.Mock).mockResolvedValue(dataset)
+        ;(Visit.findAndCountAll as jest.Mock).mockResolvedValue({ count, rows: dataset })
 
         const r = res()
         const start = performance.now()
@@ -107,7 +107,7 @@ describe('Performance – getVisits', () => {
      */
     it('50 consecutive calls maintain stable performance', async () => {
         const dataset = Array.from({ length: 200 }, (_, i) => makeVisit(i + 1))
-        ;(Visit.findAll as jest.Mock).mockResolvedValue(dataset)
+        ;(Visit.findAndCountAll as jest.Mock).mockResolvedValue({ count: 200, rows: dataset })
 
         const times: number[] = []
         for (let i = 0; i < 50; i++) {
