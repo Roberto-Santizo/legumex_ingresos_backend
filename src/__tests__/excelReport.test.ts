@@ -22,8 +22,8 @@ jest.mock('../models/Visit.model', () => ({
     default: { findAll: jest.fn() },
 }))
 
-jest.mock('../models/Visitor.model',       () => ({ __esModule: true, default: {} }))
-jest.mock('../models/VisitorPerson.model', () => ({ __esModule: true, default: {} }))
+jest.mock('../models/Company.model',       () => ({ __esModule: true, default: {} }))
+jest.mock('../models/CompanyPerson.model', () => ({ __esModule: true, default: {} }))
 jest.mock('../models/VisitCompanion.model',() => ({ __esModule: true, default: {} }))
 jest.mock('../models/Department.model',    () => ({ __esModule: true, default: {} }))
 jest.mock('../models/Agent.model',         () => ({ __esModule: true, default: {} }))
@@ -43,7 +43,7 @@ jest.mock('../middleware/jwt', () => ({
 
 // ── Imports (after mocks) ────────────────────────────────────────────────────
 
-import request from 'supertest'
+import request = require('supertest')
 import server  from '../server'
 import Visit   from '../models/Visit.model'
 

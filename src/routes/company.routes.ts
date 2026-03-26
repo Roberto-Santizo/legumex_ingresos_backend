@@ -9,7 +9,7 @@ const router = Router()
 router.post("/",
     validateJWT,
     checkPermission('companies:create'),
-    body("name").notEmpty().withMessage("Name is required"),
+    body("name").notEmpty().withMessage("name es requerido"),
     handleInputErrors,
     createCompany
 )

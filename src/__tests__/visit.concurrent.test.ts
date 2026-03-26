@@ -15,8 +15,8 @@ jest.mock('../config/db', () => ({ __esModule: true, default: { transaction: jes
 jest.mock('../models/Visit.model',         () => ({ __esModule: true, default: { findAll: jest.fn(), findAndCountAll: jest.fn(), findByPk: jest.fn(), findOne: jest.fn(), create: jest.fn() } }))
 jest.mock('../models/Visit_status.model',  () => ({ __esModule: true, default: { findOne: jest.fn() } }))
 jest.mock('../models/VisitCompanion.model', () => ({ __esModule: true, default: { findOne: jest.fn(), bulkCreate: jest.fn() } }))
-jest.mock('../models/VisitorPerson.model', () => ({ __esModule: true, default: { findByPk: jest.fn() } }))
-jest.mock('../models/Visitor.model',       () => ({ __esModule: true, default: {} }))
+jest.mock('../models/CompanyPerson.model', () => ({ __esModule: true, default: { findByPk: jest.fn() } }))
+jest.mock('../models/Company.model',       () => ({ __esModule: true, default: {} }))
 jest.mock('../models/Department.model',    () => ({ __esModule: true, default: {} }))
 jest.mock('../models/Agent.model',         () => ({ __esModule: true, default: {} }))
 
@@ -118,7 +118,7 @@ describe('Concurrency – simultaneous POST /visit', () => {
     beforeEach(() => jest.clearAllMocks())
 
     const validBody = {
-        visitor_id: 1,
+        company_id: 1,
         date: '2024-06-01',
         department_id: 1,
         responsible_person: 'John Smith',
@@ -175,7 +175,7 @@ describe('Concurrency – mixed reads and writes', () => {
 
         const writes = Array.from({ length: 50 }, () => {
             const { request, response } = makeCall()
-            request.body = { visitor_id: 1, date: '2024-06-01', department_id: 1, responsible_person: 'John', destination: 'Room A' }
+            request.body = { company_id: 1, date: '2024-06-01', department_id: 1, responsible_person: 'John', destination: 'Room A' }
             return createVisit(request as Request, response as unknown as Response)
                 .then(() => ({ type: 'write' as const, response, ok: (response.status as jest.Mock).mock.calls[0]?.[0] === 201 }))
         })

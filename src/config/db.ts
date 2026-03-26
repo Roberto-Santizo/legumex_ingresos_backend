@@ -4,21 +4,20 @@ import Role from '../models/Role.model'
 import User from '../models/User.model'
 import Department from '../models/Department.model'
 import People from '../models/People.model'
-import Company from '../models/Company.model'
 import Agent from '../models/Agent.model'
 import VisitStatus from '../models/Visit_status.model'
 import Visit from '../models/Visit.model'
 import Companion from '../models/Companion.model'
 import VisitCompanion from '../models/VisitCompanion.model'
-import Visitor from '../models/Visitor.model'
-import VisitorPerson from '../models/VisitorPerson.model'
+import Company from '../models/Company.model'
+import CompanyPerson from '../models/CompanyPerson.model'
 import Permission from '../models/Permission.model'
 import RolePermission from '../models/RolePermission.model'
 
 dotenv.config()
 
 const db = new Sequelize(process.env.DATABASE_URL!,{
-    models:[Role, User, Department, People, Company, Agent, VisitStatus, Visit, Companion, VisitCompanion, Visitor, VisitorPerson, Permission, RolePermission],
+    models:[Role, User, Department, People, Agent, VisitStatus, Visit, Companion, VisitCompanion, Company, CompanyPerson, Permission, RolePermission],
     logging: false
 })
 

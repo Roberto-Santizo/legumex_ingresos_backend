@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import VisitCompanion from "../models/VisitCompanion.model";
-import VisitorPerson from "../models/VisitorPerson.model";
+import CompanyPerson from "../models/CompanyPerson.model";
 
 const includeRelations = [
-    { model: VisitorPerson, as: 'visitor_person', attributes: ['id', 'name', 'document_number'] },
+    { model: CompanyPerson, as: 'visitor_person', attributes: ['id', 'name', 'document_number'] },
 ]
 
 export const createVisitCompanion = async (req: Request, res: Response) => {

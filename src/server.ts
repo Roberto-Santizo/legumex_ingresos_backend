@@ -14,8 +14,8 @@ import userRouter           from "./routes/user.routes"
 import visitRouter          from "./routes/visit.routes"
 import roleRouter           from "./routes/role.routes"
 import agentRouter          from "./routes/agent.routes"
-import visitorRouter        from "./routes/visitor.routes"
-import visitorPersonRouter  from "./routes/visitorPerson.routes"
+import companyRouter        from "./routes/company.routes"
+import companyPersonRouter  from "./routes/companyPerson.routes"
 import departmentRouter     from "./routes/department.routes"
 import visitCompanionRouter from "./routes/visitCompanion.routes"
 import visitReportsRouter   from "./routes/visitReports.routes"
@@ -34,12 +34,12 @@ const PERMISSIONS = [
     { name: 'companies:view',     description: 'Ver empresas' },
     { name: 'companies:create',   description: 'Crear empresas' },
     { name: 'companies:edit',     description: 'Editar empresas' },
+    { name: 'people:view',        description: 'Ver personas de empresa' },
+    { name: 'people:create',      description: 'Crear personas de empresa' },
+    { name: 'people:edit',        description: 'Editar personas de empresa' },
     { name: 'departments:view',   description: 'Ver departamentos' },
     { name: 'departments:create', description: 'Crear departamentos' },
     { name: 'departments:edit',   description: 'Editar departamentos' },
-    { name: 'visitors:view',      description: 'Ver visitantes' },
-    { name: 'visitors:create',    description: 'Crear visitantes' },
-    { name: 'visitors:edit',      description: 'Editar visitantes' },
     { name: 'visits:view',        description: 'Ver visitas propias' },
     { name: 'visits:view:all',    description: 'Ver todas las visitas' },
     { name: 'visits:create',      description: 'Crear visitas' },
@@ -121,15 +121,15 @@ const server = express()
 server.use(cors({
     origin: process.env.FRONTEND_URL ?? "http://localhost:5173"
 }))
-server.use(express.json({ limit: '20mb' }))
+server.use(express.json({ limit: '100mb' }))
 
 server.use("/api/login",            authRouter)
 server.use("/api/user",             userRouter)
 server.use("/api/visit",            visitRouter)
 server.use("/api/role",             roleRouter)
 server.use("/api/agent",            agentRouter)
-server.use("/api/visitor",          visitorRouter)
-server.use("/api/visitor-person",   visitorPersonRouter)
+server.use("/api/company",          companyRouter)
+server.use("/api/company-person",   companyPersonRouter)
 server.use("/api/department",       departmentRouter)
 server.use("/api/visit-companion",  visitCompanionRouter)
 server.use("/api/reports",          visitReportsRouter)

@@ -1,6 +1,6 @@
 import { Table, Column, DataType, Model, ForeignKey, BelongsTo } from "sequelize-typescript";
 import Visit from "./Visit.model";
-import VisitorPerson from "./VisitorPerson.model";
+import CompanyPerson from "./CompanyPerson.model";
 import Companion from "./Companion.model";
 
 @Table({
@@ -19,15 +19,16 @@ export default class VisitCompanion extends Model {
     @BelongsTo(() => Visit)
     visit: Visit
 
-    @ForeignKey(() => VisitorPerson)
+    @ForeignKey(() => CompanyPerson)
     @Column({
         type: DataType.INTEGER,
         allowNull: false,
+        field: 'visitor_person_id',
     })
-    declare visitor_person_id: number
+    declare company_person_id: number
 
-    @BelongsTo(() => VisitorPerson)
-    visitor_person: VisitorPerson
+    @BelongsTo(() => CompanyPerson)
+    company_person: CompanyPerson
 
     // Columna legada — se mantiene nullable para compatibilidad con la BD existente
     @ForeignKey(() => Companion)

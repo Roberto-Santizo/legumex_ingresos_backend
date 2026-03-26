@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
-import VisitorPerson from "../models/VisitorPerson.model";
-import Visitor from "../models/Visitor.model";
+import CompanyPerson from "../models/CompanyPerson.model";
+import Company from "../models/Company.model";
 
-export const createVisitorPerson = async (req: Request, res: Response) => {
+export const createCompanyPerson = async (req: Request, res: Response) => {
     try {
-        const person = await VisitorPerson.create(req.body)
+        const person = await CompanyPerson.create(req.body)
         return res.status(201).json({ message: "Persona creada correctamente", data: person })
     } catch (error) {
         console.log(error)
@@ -12,17 +12,17 @@ export const createVisitorPerson = async (req: Request, res: Response) => {
     }
 }
 
-export const getVisitorPersons = async (req: Request, res: Response) => {
+export const getCompanyPersons = async (req: Request, res: Response) => {
     try {
         const page  = parseInt(req.query.page  as string) || 1
         const limit = parseInt(req.query.limit as string) || 10
         const offset = (page - 1) * limit
 
-        const { count, rows } = await VisitorPerson.findAndCountAll({
+        const { count, rows } = await CompanyPerson.findAndCountAll({
             limit,
             offset,
             order: [['createdAt', 'DESC']],
-            include: [{ model: Visitor, attributes: ['id', 'name'] }],
+            include: [{ model: Company, attributes: ['id', 'name'] }],
         })
 
         const lastPage = Math.ceil(count / limit)
@@ -41,11 +41,11 @@ export const getVisitorPersons = async (req: Request, res: Response) => {
     }
 }
 
-export const getVisitorPersonById = async (req: Request, res: Response) => {
+export const getCompanyPersonById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
-        const person = await VisitorPerson.findByPk(+id, {
-            include: [{ model: Visitor, attributes: ['id', 'name'] }],
+        const person = await CompanyPerson.findByPk(+id, {
+            include: [{ model: Company, attributes: ['id', 'name'] }],
         })
         if (!person) {
             return res.status(404).json({ message: "Persona no encontrada" })
@@ -57,36 +57,37 @@ export const getVisitorPersonById = async (req: Request, res: Response) => {
     }
 }
 
-// Listar personas de un visitante/empresa especifico (util para el dropdown del check-in)
-export const getVisitorPersonsByVisitor = async (req: Request, res: Response) => {
+// Listar personas de una empresa especifica (util para el dropdown del check-in)
+export const getCompanyPersonsByCompany = async (req: Request, res: Response) => {
     try {
-        const { visitor_id } = req.params
-        const persons = await VisitorPerson.findAll({
-            where: { visitor_id: +visitor_id },
+        const { company_id } = req.params
+        const persons = await CompanyPerson.findAll({
+            where: { company_id: +company_id },
             order: [['name', 'ASC']],
         })
         return res.status(200).json({ data: persons })
     } catch (error) {
         console.log(error)
-        return res.status(500).json({ message: "Error al obtener las personas del visitante" })
+        return res.status(500).json({ message: "Error al obtener las personas de la empresa" })
     }
 }
 
-export const updateVisitorPerson = async (req: Request, res: Response) => {
+export const updateCompanyPerson = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
-        const person = await VisitorPerson.findByPk(+id)
+        const person = await CompanyPerson.findByPk(+id)
         if (!person) {
             return res.status(404).json({ message: "Persona no encontrada" })
         }
-        const { visitor_id, name, document_number, document_photo, license_number, license_photo } = req.body
+        const { company_id, name, document_number, document_photo_front, document_photo_back, license_number, license_photo } = req.body
         const updateData: Record<string, any> = {}
-        if (visitor_id !== undefined)       updateData.visitor_id = visitor_id
-        if (name !== undefined)             updateData.name = name
-        if (document_number !== undefined)  updateData.document_number = document_number
-        if (document_photo !== undefined)   updateData.document_photo = document_photo
-        if (license_number !== undefined)   updateData.license_number = license_number
-        if (license_photo !== undefined)    updateData.license_photo = license_photo
+        if (company_id !== undefined)            updateData.company_id = company_id
+        if (name !== undefined)                  updateData.name = name
+        if (document_number !== undefined)       updateData.document_number = document_number
+        if (document_photo_front !== undefined)  updateData.document_photo_front = document_photo_front
+        if (document_photo_back !== undefined)   updateData.document_photo_back = document_photo_back
+        if (license_number !== undefined)        updateData.license_number = license_number
+        if (license_photo !== undefined)         updateData.license_photo = license_photo
         await person.update(updateData)
         return res.status(200).json({ message: "Persona actualizada correctamente", data: person })
     } catch (error) {
@@ -95,10 +96,10 @@ export const updateVisitorPerson = async (req: Request, res: Response) => {
     }
 }
 
-export const deleteVisitorPerson = async (req: Request, res: Response) => {
+export const deleteCompanyPerson = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
-        const person = await VisitorPerson.findByPk(+id)
+        const person = await CompanyPerson.findByPk(+id)
         if (!person) {
             return res.status(404).json({ message: "Persona no encontrada" })
         }

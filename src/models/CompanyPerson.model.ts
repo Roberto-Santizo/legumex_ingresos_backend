@@ -1,22 +1,23 @@
 import { Table, Column, DataType, Model, ForeignKey, BelongsTo, HasMany } from "sequelize-typescript";
-import Visitor from "./Visitor.model";
+import Company from "./Company.model";
 import VisitCompanion from "./VisitCompanion.model";
 
 @Table({
-    tableName: 'visitor_person'
+    tableName: 'company_person'
 })
 
-export default class VisitorPerson extends Model {
+export default class CompanyPerson extends Model {
 
-    @ForeignKey(() => Visitor)
+    @ForeignKey(() => Company)
     @Column({
         type: DataType.INTEGER,
         allowNull: false,
+        field: 'visitor_id',
     })
-    declare visitor_id: number
+    declare company_id: number
 
-    @BelongsTo(() => Visitor)
-    visitor: Visitor
+    @BelongsTo(() => Company)
+    company: Company
 
     @Column({
         type: DataType.STRING(100),
@@ -35,7 +36,13 @@ export default class VisitorPerson extends Model {
         type: DataType.TEXT,
         allowNull: true,
     })
-    declare document_photo: string
+    declare document_photo_front: string
+
+    @Column({
+        type: DataType.TEXT,
+        allowNull: true,
+    })
+    declare document_photo_back: string
 
     @Column({
         type: DataType.STRING(100),

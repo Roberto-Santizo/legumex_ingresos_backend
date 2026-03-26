@@ -2,8 +2,8 @@ import { Request, Response } from "express"
 import { Op } from "sequelize"
 import ExcelJS from "exceljs"
 import Visit from "../models/Visit.model"
-import Visitor from "../models/Visitor.model"
-import VisitorPerson from "../models/VisitorPerson.model"
+import Company from "../models/Company.model"
+import CompanyPerson from "../models/CompanyPerson.model"
 import VisitCompanion from "../models/VisitCompanion.model"
 import Department from "../models/Department.model"
 import Agent from "../models/Agent.model"
@@ -32,15 +32,15 @@ export const getVisitsExcelReport = async (req: Request, res: Response) => {
                 entry_time: { [Op.ne]: null }, // Only visits that actually checked in
             },
             include: [
-                { model: Visitor,       as: "visitor",       attributes: ["name"] },
-                { model: VisitorPerson, as: "visitor_person", attributes: ["name", "document_number"] },
+                { model: Company,       as: "company",       attributes: ["name"] },
+                { model: CompanyPerson, as: "company_person", attributes: ["name", "document_number"] },
                 { model: Department,    as: "department",     attributes: ["name"] },
                 { model: Agent,         as: "agent",          attributes: ["name"] },
                 {
                     model: VisitCompanion,
                     as: "visit_companions",
                     include: [
-                        { model: VisitorPerson, as: "visitor_person", attributes: ["name", "document_number"] },
+                        { model: CompanyPerson, as: "company_person", attributes: ["name", "document_number"] },
                     ],
                 },
             ],
@@ -83,19 +83,19 @@ export const getVisitsExcelReport = async (req: Request, res: Response) => {
 
         // ── Data rows ────────────────────────────────────────────────────────
         for (const visit of visits) {
-            const visitor       = visit.get("visitor")        as Visitor        | null
-            const visitorPerson = visit.get("visitor_person") as VisitorPerson  | null
+            const company       = visit.get("company")        as Company        | null
+            const companyPerson = visit.get("company_person") as CompanyPerson  | null
             const department    = visit.get("department")     as Department     | null
             const companions    = visit.get("visit_companions") as VisitCompanion[] ?? []
 
             // Companions: names and DPIs joined by " / "
             const companionNames = companions
-                .map((c) => (c.get("visitor_person") as VisitorPerson | null)?.name ?? "")
+                .map((c) => (c.get("company_person") as CompanyPerson | null)?.name ?? "")
                 .filter(Boolean)
                 .join(" / ")
 
             const companionDPIs = companions
-                .map((c) => (c.get("visitor_person") as VisitorPerson | null)?.document_number ?? "")
+                .map((c) => (c.get("company_person") as CompanyPerson | null)?.document_number ?? "")
                 .filter(Boolean)
                 .join(" / ")
 
@@ -107,9 +107,9 @@ export const getVisitsExcelReport = async (req: Request, res: Response) => {
 
             const row = worksheet.addRow({
                 fecha,
-                empresa:          visitor?.name                    ?? "",
-                visitante:        visitorPerson?.name              ?? "",
-                dpi_visitante:    visitorPerson?.document_number   ?? "",
+                empresa:          company?.name                    ?? "",
+                visitante:        companyPerson?.name              ?? "",
+                dpi_visitante:    companyPerson?.document_number   ?? "",
                 acompanantes:     companionNames                   || "Sin acompañantes",
                 dpi_acompanantes: companionDPIs                    || "-",
                 departamento:     department?.name                 ?? "",

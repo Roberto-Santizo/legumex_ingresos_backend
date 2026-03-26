@@ -1,20 +1,10 @@
-import { Table,Column, DataType, Model, ForeignKey, BelongsTo } from "sequelize-typescript";
-import Company from "./Company.model";
+import { Table, Column, DataType, Model } from "sequelize-typescript";
 
 @Table({
     tableName: 'people'
 })
 
 export default class People extends Model {
-
-    @ForeignKey(() => Company)
-    @Column({
-        type: DataType.INTEGER,
-    })
-    declare company_id: number
-
-    @BelongsTo(() => Company)
-    company: Company
 
     @Column({
         type: DataType.STRING(100),
@@ -32,7 +22,12 @@ export default class People extends Model {
     @Column({
         type: DataType.TEXT,
     })
-    declare document_photo: string
+    declare document_photo_front: string
+
+    @Column({
+        type: DataType.TEXT,
+    })
+    declare document_photo_back: string
 
     @Column({
         type: DataType.STRING(100),

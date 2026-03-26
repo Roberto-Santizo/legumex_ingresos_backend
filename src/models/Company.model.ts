@@ -1,5 +1,5 @@
 import { Table, Column, DataType, Model, HasMany } from "sequelize-typescript";
-import People from "./People.model";
+import CompanyPerson from "./CompanyPerson.model";
 
 @Table({
     tableName: 'company'
@@ -13,6 +13,6 @@ export default class Company extends Model {
     })
     declare name: string
 
-    @HasMany(() => People)
-    people: People[]
+    @HasMany(() => CompanyPerson)
+    company_persons: CompanyPerson[]
 }

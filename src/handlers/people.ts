@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import People from "../models/People.model";
-import Company from "../models/Company.model";
 
 export const createPeople = async (req: Request, res: Response) => {
     try {
@@ -22,8 +21,6 @@ export const getPeople = async (req: Request, res: Response) => {
             limit,
             offset,
             order: [['createdAt', 'DESC']],
-
-            include: [{ model: Company, attributes: ['name'] }]
         })
         const lastPage = Math.ceil(count/limit)
 
@@ -44,10 +41,7 @@ export const getPeople = async (req: Request, res: Response) => {
 export const getPeopleById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
-        const person = await People.findByPk(+id, {
-
-            include: [{ model: Company, attributes: ['name'] }]
-        })
+        const person = await People.findByPk(+id)
         if (!person) {
             return res.status(404).json({ message: "Persona no encontrada" })
         }
@@ -65,14 +59,15 @@ export const updatePeople = async (req: Request, res: Response) => {
         if (!person) {
             return res.status(404).json({ message: "Persona no encontrada" })
         }
-        const { company_id, name, document_number, document_photo, license_number, license_photo } = req.body
+        const { company_id, name, document_number, document_photo_front, document_photo_back, license_number, license_photo } = req.body
         const updateData: Record<string, any> = {}
-        if (company_id !== undefined)       updateData.company_id = company_id
-        if (name !== undefined)             updateData.name = name
-        if (document_number !== undefined)  updateData.document_number = document_number
-        if (document_photo !== undefined)   updateData.document_photo = document_photo
-        if (license_number !== undefined)   updateData.license_number = license_number
-        if (license_photo !== undefined)    updateData.license_photo = license_photo
+        if (company_id !== undefined)             updateData.company_id = company_id
+        if (name !== undefined)                   updateData.name = name
+        if (document_number !== undefined)        updateData.document_number = document_number
+        if (document_photo_front !== undefined)   updateData.document_photo_front = document_photo_front
+        if (document_photo_back !== undefined)    updateData.document_photo_back = document_photo_back
+        if (license_number !== undefined)        updateData.license_number = license_number
+        if (license_photo !== undefined)         updateData.license_photo = license_photo
         await person.update(updateData)
         return res.status(200).json({ message: "Persona actualizada correctamente", data: person })
     } catch (error) {

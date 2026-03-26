@@ -4,8 +4,8 @@ import db from "../config/db"
 import Visit from "../models/Visit.model"
 import VisitStatus from "../models/Visit_status.model"
 import VisitCompanion from "../models/VisitCompanion.model"
-import Visitor from "../models/Visitor.model"
-import VisitorPerson from "../models/VisitorPerson.model"
+import Company from "../models/Company.model"
+import CompanyPerson from "../models/CompanyPerson.model"
 import Department from "../models/Department.model"
 import Agent from "../models/Agent.model"
 
@@ -111,7 +111,7 @@ export const getInPlantAt = async (req: Request, res: Response) => {
         const dayEnd   = new Date(`${date}T23:59:59.999Z`)
 
         // Main visitors: entry_time <= to AND (exit_time >= from OR exit_time is null)
-        const mainVisitors = await Visit.findAll({
+        const mainCompanys = await Visit.findAll({
             where: {
                 date: { [Op.between]: [dayStart, dayEnd] },
                 entry_time: { [Op.lte]: to },
@@ -121,8 +121,8 @@ export const getInPlantAt = async (req: Request, res: Response) => {
                 ],
             },
             include: [
-                { model: VisitorPerson, as: 'visitor_person', attributes: ['id', 'name', 'document_number'] },
-                { model: Visitor,       as: 'visitor',        attributes: ['id', 'name'] },
+                { model: CompanyPerson, as: 'company_person', attributes: ['id', 'name', 'document_number'] },
+                { model: Company,       as: 'company',        attributes: ['id', 'name'] },
                 { model: Department,    as: 'department',     attributes: ['id', 'name'] },
                 { model: VisitStatus,   as: 'visit_status',   attributes: ['id', 'name'] },
                 { model: Agent,         as: 'agent',          attributes: ['id', 'name'] },
@@ -132,15 +132,15 @@ export const getInPlantAt = async (req: Request, res: Response) => {
 
         // Build response: each visit entry with its companions
         const result = await Promise.all(
-            mainVisitors.map(async (visit) => {
+            mainCompanys.map(async (visit) => {
                 const companions = await VisitCompanion.findAll({
                     where: { visit_id: visit.id },
-                    include: [{ model: VisitorPerson, as: 'visitor_person', attributes: ['id', 'name', 'document_number'] }],
+                    include: [{ model: CompanyPerson, as: 'company_person', attributes: ['id', 'name', 'document_number'] }],
                 })
 
-                const visitorPerson  = visit.get('visitor_person')  as VisitorPerson | null
+                const companyPerson  = visit.get('company_person')  as CompanyPerson | null
                 const visitStatus    = visit.get('visit_status')    as VisitStatus   | null
-                const visitor        = visit.get('visitor')         as Visitor        | null
+                const company        = visit.get('company')         as Company        | null
                 const department     = visit.get('department')      as Department     | null
                 const agent          = visit.get('agent')           as Agent          | null
 
@@ -151,16 +151,16 @@ export const getInPlantAt = async (req: Request, res: Response) => {
                     exit_time:        visit.exit_time,
                     badge_number:     visit.badge_number,
                     status:           visitStatus?.name    ?? null,
-                    company:          visitor?.name        ?? null,
+                    company:          company?.name        ?? null,
                     department:       department?.name     ?? null,
                     agent:            agent?.name          ?? null,
                     main_visitor: {
-                        id:              visitorPerson?.id              ?? null,
-                        name:            visitorPerson?.name            ?? null,
-                        document_number: visitorPerson?.document_number ?? null,
+                        id:              companyPerson?.id              ?? null,
+                        name:            companyPerson?.name            ?? null,
+                        document_number: companyPerson?.document_number ?? null,
                     },
                     companions: companions.map((companion) => {
-                        const companionPerson = companion.get('visitor_person') as VisitorPerson | null
+                        const companionPerson = companion.get('company_person') as CompanyPerson | null
                         return {
                             id:              companionPerson?.id              ?? null,
                             name:            companionPerson?.name            ?? null,
@@ -210,7 +210,7 @@ export const getVisitsByCompany = async (req: Request, res: Response) => {
                 date: { [Op.between]: [rangeStart, rangeEnd] },
             },
             include: [
-                { model: Visitor,     as: 'visitor',      attributes: ['id', 'name'] },
+                { model: Company,     as: 'company',      attributes: ['id', 'name'] },
                 { model: VisitStatus, as: 'visit_status', attributes: ['id', 'name'] },
                 {
                     model: VisitCompanion,
@@ -231,7 +231,7 @@ export const getVisitsByCompany = async (req: Request, res: Response) => {
         }>()
 
         for (const visit of visits) {
-            const company    = visit.get('visitor')         as Visitor        | null
+            const company    = visit.get('company')         as Company        | null
             const companions = visit.get('visit_companions') as VisitCompanion[] ?? []
             if (!company) continue
 

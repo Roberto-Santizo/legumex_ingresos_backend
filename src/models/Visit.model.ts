@@ -1,7 +1,7 @@
 import { Table, Column, DataType, Model, ForeignKey, BelongsTo, HasMany } from "sequelize-typescript";
 import VisitStatus from "../models/Visit_status.model";
-import Visitor from "./Visitor.model";
-import VisitorPerson from "./VisitorPerson.model";
+import Company from "./Company.model";
+import CompanyPerson from "./CompanyPerson.model";
 import Department from "./Department.model";
 import Agent from "./Agent.model";
 import VisitCompanion from "./VisitCompanion.model";
@@ -39,26 +39,28 @@ export default class Visit extends Model {
     visit_status: VisitStatus
 
     // Empresa/proveedor que programa la visita (obligatorio desde fase 1)
-    @ForeignKey(() => Visitor)
+    @ForeignKey(() => Company)
     @Column({
         type: DataType.INTEGER,
         allowNull: false,
+        field: 'visitor_id',
     })
-    declare visitor_id: number
+    declare company_id: number
 
-    @BelongsTo(() => Visitor)
-    visitor: Visitor
+    @BelongsTo(() => Company)
+    company: Company
 
     // Persona específica que realmente llegó (el agente lo confirma en check-in)
-    @ForeignKey(() => VisitorPerson)
+    @ForeignKey(() => CompanyPerson)
     @Column({
         type: DataType.INTEGER,
         allowNull: true,
+        field: 'visitor_person_id',
     })
-    declare visitor_person_id: number
+    declare company_person_id: number
 
-    @BelongsTo(() => VisitorPerson)
-    visitor_person: VisitorPerson
+    @BelongsTo(() => CompanyPerson)
+    company_person: CompanyPerson
 
     @ForeignKey(() => Department)
     @Column({

@@ -4,39 +4,39 @@ import db from "../config/db";
 import Visit from "../models/Visit.model";
 import VisitStatus from "../models/Visit_status.model";
 import VisitCompanion from "../models/VisitCompanion.model";
-import Visitor from "../models/Visitor.model";
-import VisitorPerson from "../models/VisitorPerson.model";
+import Company from "../models/Company.model";
+import CompanyPerson from "../models/CompanyPerson.model";
 import Department from "../models/Department.model";
 import Agent from "../models/Agent.model";
 
 const includeRelations = [
-    { model: Visitor,       as: 'visitor',       attributes: ['id', 'name'] },
-    { model: VisitorPerson, as: 'visitor_person', attributes: ['id', 'name', 'document_number', 'document_photo', 'license_number', 'license_photo'] },
+    { model: Company,       as: 'company',       attributes: ['id', 'name'] },
+    { model: CompanyPerson, as: 'company_person', attributes: ['id', 'name', 'document_number', 'document_photo_front', 'document_photo_back', 'license_number', 'license_photo'] },
     { model: VisitStatus,   as: 'visit_status',  attributes: ['id', 'name'] },
     { model: Department,    as: 'department',    attributes: ['id', 'name'] },
     { model: Agent,         as: 'agent',         attributes: ['id', 'name'] },
     {
         model: VisitCompanion,
         as: 'visit_companions',
-        include: [{ model: VisitorPerson, as: 'visitor_person', attributes: ['id', 'name', 'document_number'] }],
+        include: [{ model: CompanyPerson, as: 'company_person', attributes: ['id', 'name', 'document_number'] }],
     },
 ]
 
 // Phase 1 - Schedule visit: visitor (company), person and date are required
 export const createVisit = async (req: Request, res: Response) => {
     try {
-        const { visitor_id, visitor_person_id, date, department_id, responsible_person, destination, companions } = req.body
+        const { company_id, company_person_id, date, department_id, responsible_person, destination, companions } = req.body
 
-        if (!visitor_id || !date || !department_id || !responsible_person || !destination) {
-            return res.status(400).json({ message: "Faltan campos requeridos: visitor_id, date, department_id, responsible_person, destination" })
+        if (!company_id || !date || !department_id || !responsible_person || !destination) {
+            return res.status(400).json({ message: "Faltan campos requeridos: company_id, date, department_id, responsible_person, destination" })
         }
 
         if (Array.isArray(companions) && companions.length > 0) {
-            const isMainAlsoCompanion = companions.some((c: { visitor_person_id: number }) => c.visitor_person_id === visitor_person_id)
+            const isMainAlsoCompanion = companions.some((c: { company_person_id: number }) => c.company_person_id === company_person_id)
             if (isMainAlsoCompanion) {
                 return res.status(400).json({ message: "La persona principal no puede ser también acompañante" })
             }
-            const ids = companions.map((c: { visitor_person_id: number }) => c.visitor_person_id)
+            const ids = companions.map((c: { company_person_id: number }) => c.company_person_id)
             if (new Set(ids).size !== ids.length) {
                 return res.status(400).json({ message: "Hay personas duplicadas en los acompañantes" })
             }
@@ -50,8 +50,8 @@ export const createVisit = async (req: Request, res: Response) => {
         const transaction = await db.transaction()
         try {
             const visit = await Visit.create({
-                visitor_id,
-                visitor_person_id,
+                company_id,
+                company_person_id,
                 date,
                 department_id,
                 responsible_person,
@@ -61,9 +61,9 @@ export const createVisit = async (req: Request, res: Response) => {
             }, { transaction })
 
             if (Array.isArray(companions) && companions.length > 0) {
-                const companionRecords = companions.map((c: { visitor_person_id: number }) => ({
+                const companionRecords = companions.map((c: { company_person_id: number }) => ({
                     visit_id: visit.id,
-                    visitor_person_id: c.visitor_person_id,
+                    company_person_id: c.company_person_id,
                 }))
                 await VisitCompanion.bulkCreate(companionRecords, { transaction })
             }
@@ -186,7 +186,7 @@ export const getVisitById = async (req: Request, res: Response) => {
 
 // Phase 2 - Check-in: agent registers entry time and assigns badge numbers
 // Body: { entry_time, badge_number, agent_id, companions?: [{ badge_number }] }
-// visitor_person_id and companions persons are already set from createVisit
+// company_person_id and companions persons are already set from createVisit
 export const checkIn = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
@@ -204,7 +204,7 @@ export const checkIn = async (req: Request, res: Response) => {
         }
 
         const { entry_time, badge_number, agent_id, companions } = req.body
-        const visitor_person_id = visit.visitor_person_id ?? req.body.visitor_person_id
+        const company_person_id = visit.company_person_id ?? req.body.company_person_id
 
         if (!entry_time || !badge_number || !agent_id) {
             return res.status(400).json({ message: "Faltan campos requeridos: entry_time, badge_number, agent_id" })
@@ -216,8 +216,8 @@ export const checkIn = async (req: Request, res: Response) => {
 
         const existingCompanions = ((visit as any).visit_companions as VisitCompanion[]) ?? []
 
-        if (Array.isArray(companions) && companions.length > 0 && visitor_person_id !== undefined) {
-            const isMainAlsoCompanion = companions.some((c: any) => c.visitor_person_id === visitor_person_id)
+        if (Array.isArray(companions) && companions.length > 0 && company_person_id !== undefined) {
+            const isMainAlsoCompanion = companions.some((c: any) => c.company_person_id === company_person_id)
             if (isMainAlsoCompanion) {
                 return res.status(400).json({
                     message: "La persona principal no puede ser también acompañante",
@@ -259,16 +259,16 @@ export const checkIn = async (req: Request, res: Response) => {
         // Check that the main visitor is not currently inside the plant
         const mainPersonInPlant = await Visit.findOne({
             where: {
-                visitor_person_id,
+                company_person_id,
                 visit_status_id: enPlantaStatus.id,
                 id: { [Op.ne]: +id },
             },
-            include: [{ model: VisitorPerson, as: 'visitor_person', attributes: ['id', 'name', 'document_number'] }],
+            include: [{ model: CompanyPerson, as: 'company_person', attributes: ['id', 'name', 'document_number'] }],
         })
         if (mainPersonInPlant) {
-            const person = (mainPersonInPlant as any).visitor_person
+            const person = (mainPersonInPlant as any).company_person
             return res.status(409).json({
-                message: `Verifique: ${person?.name ?? 'Esta persona'} (DPI: ${person?.document_number ?? visitor_person_id}) actualmente se encuentra en planta en la visita #${mainPersonInPlant.id}. No puede ingresar hasta que finalice su visita activa.`,
+                message: `Verifique: ${person?.name ?? 'Esta persona'} (DPI: ${person?.document_number ?? company_person_id}) actualmente se encuentra en planta en la visita #${mainPersonInPlant.id}. No puede ingresar hasta que finalice su visita activa.`,
                 code: 'PERSON_ALREADY_IN_PLANT',
                 active_visit_id: mainPersonInPlant.id,
             })
@@ -277,7 +277,7 @@ export const checkIn = async (req: Request, res: Response) => {
         // Check that no companion is currently inside the plant
         for (const companion of existingCompanions) {
             const companionInPlant = await VisitCompanion.findOne({
-                where: { visitor_person_id: companion.visitor_person_id },
+                where: { company_person_id: companion.company_person_id },
                 include: [{
                     model: Visit,
                     as: 'visit',
@@ -286,9 +286,9 @@ export const checkIn = async (req: Request, res: Response) => {
                 }],
             })
             if (companionInPlant) {
-                const companionPerson = await VisitorPerson.findByPk(companion.visitor_person_id, { attributes: ['name', 'document_number'] })
+                const companionPerson = await CompanyPerson.findByPk(companion.company_person_id, { attributes: ['name', 'document_number'] })
                 return res.status(409).json({
-                    message: `Verifique: ${companionPerson?.name ?? 'Un acompañante'} (DPI: ${companionPerson?.document_number ?? companion.visitor_person_id}) actualmente se encuentra en planta. No puede ingresar hasta que finalice su visita activa.`,
+                    message: `Verifique: ${companionPerson?.name ?? 'Un acompañante'} (DPI: ${companionPerson?.document_number ?? companion.company_person_id}) actualmente se encuentra en planta. No puede ingresar hasta que finalice su visita activa.`,
                     code: 'COMPANION_ALREADY_IN_PLANT',
                 })
             }
@@ -375,12 +375,12 @@ export const updateVisit = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Solo se pueden editar visitas en estado PROGRAMADA" })
         }
 
-        const { visitor_id, visitor_person_id, date, department_id, responsible_person, destination, companions } = req.body
+        const { company_id, company_person_id, date, department_id, responsible_person, destination, companions } = req.body
 
         if (Array.isArray(companions)) {
-            const companionIds = companions.map((c: { visitor_person_id: number }) => c.visitor_person_id)
-            // Use new visitor_person_id if provided, otherwise keep existing
-            const mainPersonId = visitor_person_id ?? visit.visitor_person_id
+            const companionIds = companions.map((c: { company_person_id: number }) => c.company_person_id)
+            // Use new company_person_id if provided, otherwise keep existing
+            const mainPersonId = company_person_id ?? visit.company_person_id
             if (mainPersonId != null && companionIds.includes(mainPersonId)) {
                 return res.status(400).json({ message: "La persona principal no puede ser también acompañante" })
             }
@@ -392,8 +392,8 @@ export const updateVisit = async (req: Request, res: Response) => {
         const transaction = await db.transaction()
         try {
             const updateData: Record<string, any> = {}
-            if (visitor_id !== undefined)         updateData.visitor_id = visitor_id
-            if (visitor_person_id !== undefined)  updateData.visitor_person_id = visitor_person_id
+            if (company_id !== undefined)         updateData.company_id = company_id
+            if (company_person_id !== undefined)  updateData.company_person_id = company_person_id
             if (date !== undefined)               updateData.date = date
             if (department_id !== undefined)      updateData.department_id = department_id
             if (responsible_person !== undefined) updateData.responsible_person = responsible_person
@@ -407,9 +407,9 @@ export const updateVisit = async (req: Request, res: Response) => {
             if (Array.isArray(companions)) {
                 await VisitCompanion.destroy({ where: { visit_id: visit.id }, transaction })
                 if (companions.length > 0) {
-                    const companionRecords = companions.map((c: { visitor_person_id: number }) => ({
+                    const companionRecords = companions.map((c: { company_person_id: number }) => ({
                         visit_id: visit.id,
-                        visitor_person_id: c.visitor_person_id,
+                        company_person_id: c.company_person_id,
                     }))
                     await VisitCompanion.bulkCreate(companionRecords, { transaction })
                 }

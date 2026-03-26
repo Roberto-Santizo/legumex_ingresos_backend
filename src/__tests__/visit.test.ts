@@ -35,7 +35,7 @@ jest.mock('../models/VisitCompanion.model', () => ({
     default: { findOne: jest.fn(), bulkCreate: jest.fn() },
 }))
 
-jest.mock('../models/VisitorPerson.model', () => ({
+jest.mock('../models/CompanyPerson.model', () => ({
     __esModule: true,
     default: { findByPk: jest.fn() },
 }))
@@ -43,7 +43,7 @@ jest.mock('../models/VisitorPerson.model', () => ({
 // These models are imported by the handler file but not used in the
 // tested functions, so we replace them with empty objects to satisfy
 // the import without any behavior.
-jest.mock('../models/Visitor.model',    () => ({ __esModule: true, default: {} }))
+jest.mock('../models/Company.model',    () => ({ __esModule: true, default: {} }))
 jest.mock('../models/Department.model', () => ({ __esModule: true, default: {} }))
 jest.mock('../models/Agent.model',      () => ({ __esModule: true, default: {} }))
 
@@ -91,7 +91,7 @@ function res() {
 describe('createVisit', () => {
     // A complete valid body that satisfies all required fields.
     const validBody = {
-        visitor_id: 1,
+        company_id: 1,
         date: '2024-06-01',
         department_id: 1,
         responsible_person: 'John Smith',
@@ -238,14 +238,14 @@ describe('getVisitById', () => {
 describe('checkIn', () => {
     // Minimum valid body for a check-in request.
     const validCheckIn = {
-        visitor_person_id: 10,
+        company_person_id: 10,
         entry_time: '2024-06-01T08:00:00Z',
         badge_number: 'B001',
         agent_id: 2,
     }
 
     beforeEach(() => {
-        jest.clearAllMocks()
+        jest.resetAllMocks()
         // checkIn wraps its DB writes in a transaction.
         // We return a fake transaction object so the handler can call
         // commit() and rollback() without hitting a real database.
@@ -409,7 +409,7 @@ describe('checkIn', () => {
                 params: { id: '1' },
                 body: {
                     ...validCheckIn,
-                    companions: [{ visitor_person_id: 10, badge_number: 'B002' }], // same id as main
+                    companions: [{ company_person_id: 10, badge_number: 'B002' }], // same id as main
                 },
             }) as Request,
             r as unknown as Response
