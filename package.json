@@ -4,9 +4,11 @@
   "description": "Plant access control",
   "license": "ISC",
   "author": "Luis Gonzalez @codeWithLuis",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon --exec ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
     "test": "jest"
   },
   "devDependencies": {
