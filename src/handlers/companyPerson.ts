@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { UniqueConstraintError } from "sequelize";
 import CompanyPerson from "../models/CompanyPerson.model";
 import Company from "../models/Company.model";
 
@@ -7,6 +8,12 @@ export const createCompanyPerson = async (req: Request, res: Response) => {
         const person = await CompanyPerson.create(req.body)
         return res.status(201).json({ message: "Persona creada correctamente", data: person })
     } catch (error) {
+        if (error instanceof UniqueConstraintError) {
+            const field = error.errors[0]?.path ?? "documento"
+            return res.status(409).json({
+                message: `La persona que estás tratando de registrar ya está registrada en el sistema. El campo "${field}" ya existe.`
+            })
+        }
         console.log(error)
         return res.status(500).json({ message: "Error al crear la persona" })
     }
