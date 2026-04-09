@@ -36,6 +36,4 @@ export default class Companion extends Model {
         allowNull: true,
     })
     declare license_photo: string
-
-
 }

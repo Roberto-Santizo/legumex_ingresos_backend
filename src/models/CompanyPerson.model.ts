@@ -47,7 +47,7 @@ export default class CompanyPerson extends Model {
     @Column({
         type: DataType.STRING(100),
         allowNull: true,
-    })
+    }) 
     declare license_number: string
 
     @Column({
