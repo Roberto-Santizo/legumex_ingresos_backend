@@ -19,6 +19,12 @@ dotenv.config()
 const db = new Sequelize(process.env.DATABASE_URL!,{
     models:[Role, User, Department, People, Agent, VisitStatus, Visit, Companion, VisitCompanion, Company, CompanyPerson, Permission, RolePermission],
     logging: false,
+    pool: {
+        max: 5,
+        min: 1,
+        acquire: 30000,
+        idle: 10000,
+    },
 })
 
 export default db;
