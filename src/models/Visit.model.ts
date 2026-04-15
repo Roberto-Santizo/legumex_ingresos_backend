@@ -12,7 +12,9 @@ import User from "./User.model";
         indexes: [
         { fields: ['visitor_person_id'] },
         { fields: ['visit_status_id'] },
-        { fields: ['visitor_person_id', 'visit_status_id'] }, // índice compuesto
+        { fields: ['visitor_person_id', 'visit_status_id'] },
+        { fields: ['date'] },
+        { fields: ['date', 'visit_status_id'] },
     ]
 })
 
@@ -86,6 +88,12 @@ export default class Visit extends Model {
         allowNull: true,
     })
     declare badge_number: string
+
+    @Column({
+        type: DataType.STRING(20),
+        allowNull: true,
+    })
+    declare license_plate: string | null
 
     @Column({
         type: DataType.TIME,

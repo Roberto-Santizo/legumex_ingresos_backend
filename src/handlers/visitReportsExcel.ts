@@ -59,11 +59,13 @@ export const getVisitsExcelReport = async (req: Request, res: Response) => {
             { header: "DPI Visitante",         key: "dpi_visitante",      width: 18 },
             { header: "Acompañantes",          key: "acompanantes",       width: 40 },
             { header: "DPI Acompañantes",      key: "dpi_acompanantes",   width: 35 },
+            { header: "Placas Vehículo",       key: "placas",             width: 16 },
             { header: "Departamento",          key: "departamento",       width: 20 },
             { header: "Área de Destino",       key: "area_destino",       width: 25 },
             { header: "Responsable",           key: "responsable",        width: 25 },
             { header: "Hora de Ingreso",       key: "hora_ingreso",       width: 15 },
             { header: "Hora de Salida",        key: "hora_salida",        width: 15 },
+            { header: "Fecha de Salida",       key: "fecha_salida",       width: 16 },
         ]
 
         // Header row styles
@@ -105,6 +107,16 @@ export const getVisitsExcelReport = async (req: Request, res: Response) => {
                 ? `${String(rawDate.getUTCDate()).padStart(2,"0")}/${String(rawDate.getUTCMonth()+1).padStart(2,"0")}/${rawDate.getUTCFullYear()}`
                 : ""
 
+            // Exit date: if exit_time < entry_time the person left the next calendar day
+            let fecha_salida = ""
+            if (visit.exit_time && rawDate) {
+                const exitDate = new Date(rawDate)
+                if (visit.entry_time && visit.exit_time < visit.entry_time) {
+                    exitDate.setUTCDate(exitDate.getUTCDate() + 1)
+                }
+                fecha_salida = `${String(exitDate.getUTCDate()).padStart(2,"0")}/${String(exitDate.getUTCMonth()+1).padStart(2,"0")}/${exitDate.getUTCFullYear()}`
+            }
+
             const row = worksheet.addRow({
                 fecha,
                 empresa:          company?.name                    ?? "",
@@ -112,11 +124,13 @@ export const getVisitsExcelReport = async (req: Request, res: Response) => {
                 dpi_visitante:    companyPerson?.document_number   ?? "",
                 acompanantes:     companionNames                   || "Sin acompañantes",
                 dpi_acompanantes: companionDPIs                    || "-",
+                placas:           visit.license_plate              || "-",
                 departamento:     department?.name                 ?? "",
                 area_destino:     visit.destination                ?? "",
                 responsable:      visit.responsible_person         ?? "",
                 hora_ingreso:     visit.entry_time                 ?? "",
                 hora_salida:      visit.exit_time                  || "Aún en planta",
+                fecha_salida:     fecha_salida                     || "-",
             })
 
             // Border on each data cell

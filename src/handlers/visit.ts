@@ -18,9 +18,13 @@ const includeRelations = [
     {
         model: VisitCompanion,
         as: 'visit_companions',
+        separate: true,
         include: [{ model: CompanyPerson, as: 'company_person', attributes: ['id', 'name', 'document_number'] }],
     },
 ]
+
+// IDs fijos de los estados de visita (evita queries extra en cada request)
+const VISIT_STATUS_CACHE: Record<string, number> = {}
 
 // Phase 1 - Schedule visit: visitor (company), person and date are required
 export const createVisit = async (req: Request, res: Response) => {
@@ -97,8 +101,12 @@ export const getVisits = async (req: Request, res: Response) => {
         }
 
         if (status) {
-            const visitStatus = await VisitStatus.findOne({ where: { name: String(status).toUpperCase() } })
-            if (visitStatus) where.visit_status_id = visitStatus.id
+            const statusName = String(status).toUpperCase()
+            if (!VISIT_STATUS_CACHE[statusName]) {
+                const found = await VisitStatus.findOne({ where: { name: statusName }, attributes: ['id'] })
+                if (found) VISIT_STATUS_CACHE[statusName] = found.id
+            }
+            if (VISIT_STATUS_CACHE[statusName]) where.visit_status_id = VISIT_STATUS_CACHE[statusName]
         }
 
         // Si no tiene visits:view:all, solo ve las visitas que él creó
@@ -203,7 +211,7 @@ export const checkIn = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Solo se puede registrar el ingreso de visitas en estado PROGRAMADA" })
         }
 
-        const { entry_time, badge_number, agent_id, companions } = req.body
+        const { entry_time, badge_number, agent_id, license_plate, companions } = req.body
         const company_person_id = visit.company_person_id ?? req.body.company_person_id
 
         if (!entry_time || !badge_number || !agent_id) {
@@ -300,6 +308,7 @@ export const checkIn = async (req: Request, res: Response) => {
                 entry_time,
                 badge_number,
                 agent_id,
+                license_plate: license_plate ?? null,
                 visit_status_id: enPlantaStatus.id,
             }, { transaction })
 
