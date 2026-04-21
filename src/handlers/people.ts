@@ -25,6 +25,7 @@ export const getPeople = async (req: Request, res: Response) => {
         const offset = (page - 1) * limit
 
         const {count, rows} = await People.findAndCountAll({
+            attributes: { exclude: ['document_photo_front', 'document_photo_back', 'license_photo'] },
             limit,
             offset,
             order: [['createdAt', 'DESC']],

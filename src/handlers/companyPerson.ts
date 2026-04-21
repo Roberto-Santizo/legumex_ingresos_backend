@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { UniqueConstraintError } from "sequelize";
+import { UniqueConstraintError, literal } from "sequelize";
 import CompanyPerson from "../models/CompanyPerson.model";
 import Company from "../models/Company.model";
 
@@ -26,6 +26,12 @@ export const getCompanyPersons = async (req: Request, res: Response) => {
         const offset = (page - 1) * limit
 
         const { count, rows } = await CompanyPerson.findAndCountAll({
+            attributes: [
+                'id', 'company_id', 'name', 'document_number', 'license_number', 'createdAt', 'updatedAt',
+                [literal("document_photo_front IS NOT NULL"), 'has_document_photo_front'],
+                [literal("document_photo_back IS NOT NULL"),  'has_document_photo_back'],
+                [literal("license_photo IS NOT NULL"),        'has_license_photo'],
+            ],
             limit,
             offset,
             order: [['createdAt', 'DESC']],
