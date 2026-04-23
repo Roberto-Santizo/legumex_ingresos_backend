@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Op } from "sequelize";
+import { Op, literal } from "sequelize";
 import db from "../config/db";
 import Visit from "../models/Visit.model";
 import VisitStatus from "../models/Visit_status.model";
@@ -11,7 +11,15 @@ import Agent from "../models/Agent.model";
 
 const includeRelations = [
     { model: Company,       as: 'company',       attributes: ['id', 'name'] },
-    { model: CompanyPerson, as: 'company_person', attributes: ['id', 'name', 'document_number', 'license_number'] },
+    {
+        model: CompanyPerson, as: 'company_person',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        attributes: [
+            'id', 'name', 'document_number', 'license_number',
+            [literal("NULLIF(\"company_person\".\"document_photo_front\", '') IS NOT NULL"), 'has_document_photo_front'],
+            [literal("NULLIF(\"company_person\".\"license_photo\", '') IS NOT NULL"), 'has_license_photo'],
+        ] as any,
+    },
     { model: VisitStatus,   as: 'visit_status',  attributes: ['id', 'name'] },
     { model: Department,    as: 'department',    attributes: ['id', 'name'] },
     { model: Agent,         as: 'agent',         attributes: ['id', 'name'] },
