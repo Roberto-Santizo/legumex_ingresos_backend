@@ -20,6 +20,11 @@ export const getCompanies = async (req: Request, res: Response) => {
             where.name = { [Op.iLike]: `%${name}%` }
         }
 
+        if (req.query.all === 'true') {
+            const rows = await Company.findAll({ where, order: [['name', 'ASC']] })
+            return res.status(200).json({ statusCode: 200, response: rows })
+        }
+
         const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 10
         const offset = (page - 1) * limit
