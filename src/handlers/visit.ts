@@ -92,10 +92,10 @@ export const createVisit = async (req: Request, res: Response) => {
     }
 }
 
-// Get all visits with optional filters ?date=YYYY-MM-DD&status=PROGRAMADA&page=1&limit=10
+// Get all visits with optional filters ?date=YYYY-MM-DD&status=PROGRAMADA&name=xx&document_number=xx&page=1&limit=10
 export const getVisits = async (req: Request, res: Response) => {
     try {
-        const { date, status } = req.query
+        const { date, status, name, document_number } = req.query
         const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 10
         const offset = (page - 1) * limit
@@ -122,12 +122,26 @@ export const getVisits = async (req: Request, res: Response) => {
             where.created_by = req.user!.id
         }
 
+        const personWhere: Record<string, any> = {}
+        if (name) personWhere.name = { [Op.iLike]: `%${name}%` }
+        if (document_number) personWhere.document_number = { [Op.iLike]: `%${document_number}%` }
+        const hasPersonFilter = Object.keys(personWhere).length > 0
+
+        const activeInclude = hasPersonFilter
+            ? includeRelations.map(rel =>
+                ('as' in rel && rel.as === 'company_person')
+                    ? { ...rel, where: personWhere, required: true }
+                    : rel
+              )
+            : includeRelations
+
         const { count, rows } = await Visit.findAndCountAll({
             where,
-            include: includeRelations,
+            include: activeInclude,
             order: [['createdAt', 'DESC']],
             limit,
             offset,
+            distinct: true,
         })
 
         const lastPage = Math.ceil(count / limit)

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { UniqueConstraintError, literal } from "sequelize";
+import { UniqueConstraintError, literal, Op } from "sequelize";
 import CompanyPerson from "../models/CompanyPerson.model";
 import Company from "../models/Company.model";
 
@@ -21,11 +21,17 @@ export const createCompanyPerson = async (req: Request, res: Response) => {
 
 export const getCompanyPersons = async (req: Request, res: Response) => {
     try {
+        const { name, document_number } = req.query
+        const where: any = {}
+        if (name) where.name = { [Op.iLike]: `%${name}%` }
+        if (document_number) where.document_number = { [Op.iLike]: `%${document_number}%` }
+
         const page  = parseInt(req.query.page  as string) || 1
         const limit = parseInt(req.query.limit as string) || 10
         const offset = (page - 1) * limit
 
         const { count, rows } = await CompanyPerson.findAndCountAll({
+            where,
             attributes: {
                 exclude: ['document_photo_front', 'document_photo_back', 'license_photo'],
                 include: [

@@ -1,5 +1,6 @@
 import { Request, Response } from "express"
 import Company from "../models/Company.model";
+import { Op } from "sequelize";
 
 export const createCompany = async (req: Request, res: Response) => {
     try {
@@ -13,23 +14,23 @@ export const createCompany = async (req: Request, res: Response) => {
 
 export const getCompanies = async (req: Request, res: Response) => {
     try {
-        if (req.query.all === "true") {
-            const rows = await Company.findAll({ order: [['name', 'ASC']] })
-            return res.status(200).json({ statusCode: 200, response: rows })
+        const { name } = req.query
+        const where: any = {}
+        if (name) {
+            where.name = { [Op.iLike]: `%${name}%` }
         }
 
-        const page  = parseInt(req.query.page  as string) || 1
+        const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 10
         const offset = (page - 1) * limit
 
         const { count, rows } = await Company.findAndCountAll({
+            where,
             limit,
             offset,
-            order: [['createdAt', 'DESC'], ['id', 'ASC']],
+            order: [['name', 'ASC']],
         })
-
         const lastPage = Math.ceil(count / limit)
-
         return res.status(200).json({
             statusCode: 200,
             response: rows,
@@ -39,7 +40,6 @@ export const getCompanies = async (req: Request, res: Response) => {
             limit,
         })
     } catch (error) {
-        console.log(error)
         return res.status(500).json({ message: "No se pudieron obtener las empresas" })
     }
 }
