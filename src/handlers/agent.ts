@@ -13,6 +13,13 @@ export const createAgent = async (req: Request, res: Response) => {
 
 export const getAgents = async(req: Request, res: Response) => {
     try {
+        if (req.query.all === 'true') {
+            const rows = await Agent.findAll({ order: [['createdAt', 'DESC']] })
+            return res.status(200).json({
+                statusCode: 200,
+                response: rows,
+            })
+        }
         const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 10
         const offset = (page - 1) * limit
