@@ -17,22 +17,22 @@ jest.mock('../config/db', () => ({
     },
 }))
 
-jest.mock('../models/Visit.model', () => ({
+jest.mock('../models/VisitsModule/Visit.model', () => ({
     __esModule: true,
     default: { findAll: jest.fn() },
 }))
 
-jest.mock('../models/Company.model',       () => ({ __esModule: true, default: {} }))
-jest.mock('../models/CompanyPerson.model', () => ({ __esModule: true, default: {} }))
-jest.mock('../models/VisitCompanion.model',() => ({ __esModule: true, default: {} }))
-jest.mock('../models/Department.model',    () => ({ __esModule: true, default: {} }))
-jest.mock('../models/Agent.model',         () => ({ __esModule: true, default: {} }))
-jest.mock('../models/Visit_status.model',  () => ({ __esModule: true, default: { bulkCreate: jest.fn().mockResolvedValue(undefined), findOne: jest.fn() } }))
-jest.mock('../models/Permission.model',    () => ({ __esModule: true, default: { bulkCreate: jest.fn().mockResolvedValue(undefined), findAll: jest.fn().mockResolvedValue([]) } }))
-jest.mock('../models/Role.model',          () => ({ __esModule: true, default: { findOrCreate: jest.fn().mockResolvedValue([{ id: 1 }, true]) } }))
-jest.mock('../models/RolePermission.model',() => ({ __esModule: true, default: { findAll: jest.fn().mockResolvedValue([]), bulkCreate: jest.fn().mockResolvedValue(undefined) } }))
-jest.mock('../models/User.model',          () => ({ __esModule: true, default: { findOne: jest.fn().mockResolvedValue({ id: 1 }), create: jest.fn() } }))
-jest.mock('../models/Department.model',    () => ({ __esModule: true, default: { findOrCreate: jest.fn().mockResolvedValue([{ id: 1 }, true]) } }))
+jest.mock('../models/VisitsModule/Company.model',       () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/CompanyPerson.model', () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/VisitCompanion.model',() => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/Department.model',    () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/Agent.model',         () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/Visit_status.model',  () => ({ __esModule: true, default: { bulkCreate: jest.fn().mockResolvedValue(undefined), findOne: jest.fn() } }))
+jest.mock('../models/AccessControl/Permission.model',    () => ({ __esModule: true, default: { bulkCreate: jest.fn().mockResolvedValue(undefined), findAll: jest.fn().mockResolvedValue([]) } }))
+jest.mock('../models/AccessControl/Role.model',          () => ({ __esModule: true, default: { findOrCreate: jest.fn().mockResolvedValue([{ id: 1 }, true]) } }))
+jest.mock('../models/AccessControl/RolePermission.model',() => ({ __esModule: true, default: { findAll: jest.fn().mockResolvedValue([]), bulkCreate: jest.fn().mockResolvedValue(undefined) } }))
+jest.mock('../models/AccessControl/User.model',          () => ({ __esModule: true, default: { findOne: jest.fn().mockResolvedValue({ id: 1 }), create: jest.fn() } }))
+jest.mock('../models/VisitsModule/Department.model',    () => ({ __esModule: true, default: { findOrCreate: jest.fn().mockResolvedValue([{ id: 1 }, true]) } }))
 
 // ── Mock JWT middleware — let every request through ─────────────────────────
 
@@ -45,7 +45,7 @@ jest.mock('../middleware/jwt', () => ({
 
 import request = require('supertest')
 import server  from '../server'
-import Visit   from '../models/Visit.model'
+import Visit   from '../models/VisitsModule/Visit.model'
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 

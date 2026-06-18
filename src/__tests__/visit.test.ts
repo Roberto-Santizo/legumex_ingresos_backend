@@ -20,22 +20,22 @@ jest.mock('../config/db', () => ({
     default: { transaction: jest.fn() },
 }))
 
-jest.mock('../models/Visit.model', () => ({
+jest.mock('../models/VisitsModule/Visit.model', () => ({
     __esModule: true,
     default: { create: jest.fn(), findAll: jest.fn(), findAndCountAll: jest.fn(), findOne: jest.fn(), findByPk: jest.fn() },
 }))
 
-jest.mock('../models/Visit_status.model', () => ({
+jest.mock('../models/VisitsModule/Visit_status.model', () => ({
     __esModule: true,
     default: { findOne: jest.fn(), bulkCreate: jest.fn() },
 }))
 
-jest.mock('../models/VisitCompanion.model', () => ({
+jest.mock('../models/VisitsModule/VisitCompanion.model', () => ({
     __esModule: true,
     default: { findOne: jest.fn(), bulkCreate: jest.fn() },
 }))
 
-jest.mock('../models/CompanyPerson.model', () => ({
+jest.mock('../models/VisitsModule/CompanyPerson.model', () => ({
     __esModule: true,
     default: { findByPk: jest.fn() },
 }))
@@ -43,16 +43,16 @@ jest.mock('../models/CompanyPerson.model', () => ({
 // These models are imported by the handler file but not used in the
 // tested functions, so we replace them with empty objects to satisfy
 // the import without any behavior.
-jest.mock('../models/Company.model',    () => ({ __esModule: true, default: {} }))
-jest.mock('../models/Department.model', () => ({ __esModule: true, default: {} }))
-jest.mock('../models/Agent.model',      () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/Company.model',    () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/Department.model', () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/Agent.model',      () => ({ __esModule: true, default: {} }))
 
 // ── Imports ────────────────────────────────────────────────────────────────────
 
 import type { Request, Response } from 'express'
-import {createVisit,getVisits,getVisitById,checkIn,checkOut,cancelVisit} from '../handlers/visit'
-import Visit         from '../models/Visit.model'
-import VisitStatus   from '../models/Visit_status.model'
+import {createVisit,getVisits,getVisitById,checkIn,checkOut,cancelVisit} from '../handlers/VisitsModule/visit'
+import Visit         from '../models/VisitsModule/Visit.model'
+import VisitStatus   from '../models/VisitsModule/Visit_status.model'
 import db            from '../config/db'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

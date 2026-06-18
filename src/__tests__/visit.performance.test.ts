@@ -12,20 +12,20 @@
 // ── Mocks ──────────────────────────────────────────────────────────────────────
 
 jest.mock('../config/db', () => ({ __esModule: true, default: { transaction: jest.fn() } }))
-jest.mock('../models/Visit.model',         () => ({ __esModule: true, default: { findAll: jest.fn(), findAndCountAll: jest.fn(), findByPk: jest.fn(), findOne: jest.fn() } }))
-jest.mock('../models/Visit_status.model',  () => ({ __esModule: true, default: { findOne: jest.fn() } }))
-jest.mock('../models/VisitCompanion.model', () => ({ __esModule: true, default: {} }))
-jest.mock('../models/CompanyPerson.model', () => ({ __esModule: true, default: {} }))
-jest.mock('../models/Company.model',       () => ({ __esModule: true, default: {} }))
-jest.mock('../models/Department.model',    () => ({ __esModule: true, default: {} }))
-jest.mock('../models/Agent.model',         () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/Visit.model',         () => ({ __esModule: true, default: { findAll: jest.fn(), findAndCountAll: jest.fn(), findByPk: jest.fn(), findOne: jest.fn() } }))
+jest.mock('../models/VisitsModule/Visit_status.model',  () => ({ __esModule: true, default: { findOne: jest.fn() } }))
+jest.mock('../models/VisitsModule/VisitCompanion.model', () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/CompanyPerson.model', () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/Company.model',       () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/Department.model',    () => ({ __esModule: true, default: {} }))
+jest.mock('../models/VisitsModule/Agent.model',         () => ({ __esModule: true, default: {} }))
 
 // ── Imports ────────────────────────────────────────────────────────────────────
 
 import type { Request, Response } from 'express'
-import { getVisits, getVisitsToday, getVisitsActive } from '../handlers/visit'
-import Visit       from '../models/Visit.model'
-import VisitStatus from '../models/Visit_status.model'
+import { getVisits, getVisitsToday, getVisitsActive } from '../handlers/VisitsModule/visit'
+import Visit       from '../models/VisitsModule/Visit.model'
+import VisitStatus from '../models/VisitsModule/Visit_status.model'
 
 // ── Configuration ──────────────────────────────────────────────────────────────
 
