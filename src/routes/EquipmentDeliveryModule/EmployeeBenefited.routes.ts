@@ -1,6 +1,8 @@
 import { Router } from 'express';
+import { param } from 'express-validator';
+import { handleInputErrors } from '../../middleware';
 import { validateJWT, checkPermission } from '../../middleware/jwt';
-import {searchExternalEmployees, findOrCreateEmployeeBenefited, getEmployeeBenefiteds } from '../../handlers/EquipmentDeliveryModule/EmployeeBenefited';
+import {searchExternalEmployees, findOrCreateEmployeeBenefited, getEmployeeBenefiteds, deleteEmployeeBenefited } from '../../handlers/EquipmentDeliveryModule/EmployeeBenefited';
 
 
 const router = Router();
@@ -21,6 +23,14 @@ router.get('/',
     validateJWT,
     checkPermission('employeeBenefited:view'),
     getEmployeeBenefiteds
+);
+
+router.delete('/:id',
+    validateJWT,
+    checkPermission('employeeBenefited:delete'),
+    param('id').isInt().withMessage('Id no válido'),
+    handleInputErrors,
+    deleteEmployeeBenefited
 );
 
 export default router;

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import EmployeeBenefited from "../../models/EquipmentDeliveryModule/EmployeeBenefited.model";
+import EmployeeBenefited, { EmployeeBenefitedStatus } from "../../models/EquipmentDeliveryModule/EmployeeBenefited.model";
+import DeliveryEquipmentTransaction from "../../models/EquipmentDeliveryModule/DeliveryEquipmentTransaction.model";
 import { Op, WhereOptions } from "sequelize";
 
 const BIOMETRICO_API_URL = process.env.BIOMETRICO_API_URL!;
@@ -35,7 +36,30 @@ export const searchExternalEmployees = async (req: Request, response: Response) 
             )
             : externalEmployees;
 
-        return response.status(200).json({ data: employees });
+        // Enriquece cada empleado externo con su estado actual en el sistema (si ya existe),
+        // para que el personal vea si ya recibió equipo antes de seleccionarlo de nuevo.
+        const externalIds = employees.map((employee) => employee.id);
+        const existingRecords = externalIds.length > 0
+            ? await EmployeeBenefited.findAll({ where: { external_id: { [Op.in]: externalIds } } })
+            : [];
+        const recordByExternalId = new Map(existingRecords.map((record) => [record.external_id, record]));
+
+        const enrichedEmployees = await Promise.all(employees.map(async (employee) => {
+            const existingRecord = recordByExternalId.get(employee.id);
+            if (!existingRecord) {
+                return { ...employee, existing_status: null, last_delivery_date: null };
+            }
+            const lastDeliveryDate = await DeliveryEquipmentTransaction.max('delivery_date', {
+                where: { employee_benefited_id: existingRecord.employee_benefited_id },
+            }) as Date | null;
+            return {
+                ...employee,
+                existing_status: existingRecord.status,
+                last_delivery_date: lastDeliveryDate,
+            };
+        }));
+
+        return response.status(200).json({ data: enrichedEmployees });
     } catch (error) {
         return response.status(500).json({ message: "Error al obtener empleados externos" });
     }
@@ -61,6 +85,10 @@ export const findOrCreateEmployeeBenefited = async (req: Request, response: Resp
             }
         });
 
+        // Si el empleado ya había completado un ciclo de entrega, seleccionarlo de nuevo
+        // reabre el proceso automaticamente para que pueda recibir equipo otra vez.
+        const wasReopened = !created && employee.status === EmployeeBenefitedStatus.COMPLETED;
+
         if (!created) {
             await employee.update({
                 employee_name: name,
@@ -68,10 +96,11 @@ export const findOrCreateEmployeeBenefited = async (req: Request, response: Resp
                 employee_position: position ?? null,
                 department_name: deparment?.name ?? null,
                 photo_url: photo_url ?? null,
+                ...(wasReopened ? { status: EmployeeBenefitedStatus.DELIVER_EQUIPMENT } : {}),
             });
         }
 
-        return response.status(200).json({ data: employee });
+        return response.status(200).json({ data: employee, reopened: wasReopened });
     } catch (error) {
         return response.status(500).json({ message: "Error al registrar empleado beneficiado" });
     }
@@ -86,7 +115,7 @@ export const getEmployeeBenefiteds = async (req: Request, response: Response) =>
             where.employee_name = {[Op.iLike]: `%${name}%`};
         }
         if(req.query.all === 'true'){
-            const row = await EmployeeBenefited.findAll({where, order: [['createdAt', 'DESC']]});
+            const row = await EmployeeBenefited.findAll({where, order: [['updatedAt', 'DESC']]});
             return response.status(200).json({data: row});
         }
         const page = parseInt(req.query.page as string) || 1;
@@ -97,7 +126,7 @@ export const getEmployeeBenefiteds = async (req: Request, response: Response) =>
             where,
             limit,
             offset,
-            order: [['createdAt', 'DESC']],
+            order: [['updatedAt', 'DESC']],
         })
         const lastPage = Math.ceil(count / limit);
         return response.status(200).json({
@@ -110,5 +139,23 @@ export const getEmployeeBenefiteds = async (req: Request, response: Response) =>
         })
     } catch (error) {
         return response.status(500).json({ message: "No se pudieron obtener los empleados beneficiados" });
+    }
+};
+
+// DELETE /employee-benefited/:id — solo permite eliminar empleados que aún no han recibido equipo
+export const deleteEmployeeBenefited = async (req: Request, response: Response) => {
+    try {
+        const { id } = req.params;
+        const employeeBenefited = await EmployeeBenefited.findByPk(+id);
+        if (!employeeBenefited) {
+            return response.status(404).json({ message: "Empleado beneficiado no encontrado" });
+        }
+        if (employeeBenefited.status !== EmployeeBenefitedStatus.DELIVER_EQUIPMENT) {
+            return response.status(400).json({ message: "Solo se pueden eliminar empleados que aún no han recibido equipo" });
+        }
+        await employeeBenefited.destroy();
+        return response.status(200).json({ message: "Empleado beneficiado eliminado correctamente" });
+    } catch (error) {
+        return response.status(500).json({ message: "Error al eliminar el empleado beneficiado" });
     }
 };

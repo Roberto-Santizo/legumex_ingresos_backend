@@ -14,6 +14,24 @@ const DELIVERY_TYPE_LABELS: Record<string, string> = {
     CHANGE:    'Cambio',
 }
 
+const REPORT_TIME_ZONE = 'America/Guatemala'
+
+// Formatea la fecha en la zona horaria de Guatemala, sin importar en que zona horaria corra el servidor.
+function formatDeliveryDate(date: Date): string {
+    const parts = new Intl.DateTimeFormat('es-GT', {
+        timeZone: REPORT_TIME_ZONE,
+        day:      '2-digit',
+        month:    '2-digit',
+        year:     'numeric',
+        hour:     '2-digit',
+        minute:   '2-digit',
+        hourCycle: 'h23',
+    }).formatToParts(date)
+
+    const getPart = (type: string) => parts.find((part) => part.type === type)?.value ?? ''
+    return `${getPart('day')}/${getPart('month')}/${getPart('year')} ${getPart('hour')}:${getPart('minute')}`
+}
+
 // ─── GET /api/equipment-reports/excel?from=YYYY-MM-DD&to=YYYY-MM-DD ──────────
 // Generates and downloads an Excel file with all equipment delivery
 // transactions within the given date range, including employee, equipment
@@ -99,9 +117,7 @@ export const getEquipmentExcelReport = async (req: Request, res: Response) => {
             const equipment        = equipmentDetails?.get("equipment") as Equipment | null | undefined
 
             const rawDate = transaction.delivery_date as unknown as Date
-            const fecha = rawDate
-                ? `${String(rawDate.getUTCDate()).padStart(2,"0")}/${String(rawDate.getUTCMonth()+1).padStart(2,"0")}/${rawDate.getUTCFullYear()} ${String(rawDate.getUTCHours()).padStart(2,"0")}:${String(rawDate.getUTCMinutes()).padStart(2,"0")}`
-                : ""
+            const fecha = rawDate ? formatDeliveryDate(rawDate) : ""
 
             const isChange = transaction.delivery_equipment_type === 'CHANGE'
 

@@ -42,8 +42,10 @@ const PERMISSIONS = [
     { name: 'departments:delete',   description: 'Eliminar departamentos' },
     { name: 'employeeBenefited:view',       description: 'Ver empleados beneficiados' },
     { name: 'employeeBenefited:edit',       description: 'Registrar empleado beneficiado' },
+    { name: 'employeeBenefited:delete',     description: 'Eliminar empleado beneficiado' },
     { name: 'deliveryTransaction:create',     description: 'Asignar equipo a empleado' },
     { name: 'deliveryTransaction:finalPhoto', description: 'Subir foto final de entrega' },
+    { name: 'deliveryTransaction:view',       description: 'Ver historial de entregas de equipo' },
 ]
 
 async function seedAdmin() {

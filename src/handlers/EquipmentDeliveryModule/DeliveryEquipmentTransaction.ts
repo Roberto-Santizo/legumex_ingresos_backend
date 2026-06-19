@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import EmployeeBenefited, { EmployeeBenefitedStatus } from "../../models/EquipmentDeliveryModule/EmployeeBenefited.model";
 import EquipmentDeliveryDetails from "../../models/EquipmentDeliveryModule/EquipmentDeliveryDetails";
 import DeliveryEquipmentTransaction from "../../models/EquipmentDeliveryModule/DeliveryEquipmentTransaction.model";
+import Equipment from "../../models/EquipmentDeliveryModule/Equipment.model";
+import { User } from "../../models/AccessControl";
 import { uploadImageToS3 } from "../../services/s3Upload.service";
 
 interface TransactionItem {
@@ -63,6 +65,57 @@ export const createDeliveryEquipmentTransaction = async (req: Request, res: Resp
         });
     } catch (error) {
         return res.status(500).json({ message: "No se pudo registrar la entrega de equipo" });
+    }
+};
+
+// GET /delivery-equipment-transaction/by-employee/:employeeBenefitedId — historial de entregas de un empleado
+export const getDeliveryTransactionsByEmployee = async (req: Request, res: Response) => {
+    try {
+        const employeeBenefitedId = +req.params.employeeBenefitedId;
+
+        const employee = await EmployeeBenefited.findByPk(employeeBenefitedId);
+        if (!employee) {
+            return res.status(404).json({ message: "Empleado no encontrado" });
+        }
+
+        const transactions = await DeliveryEquipmentTransaction.findAll({
+            where: { employee_benefited_id: employeeBenefitedId },
+            include: [
+                {
+                    model: EquipmentDeliveryDetails,
+                    as: "equipmentDetails",
+                    attributes: ["equipment_condition"],
+                    include: [
+                        { model: Equipment, as: "equipment", attributes: ["equipment_name"] },
+                    ],
+                },
+                { model: User, as: "deliveredBy", attributes: ["name"] },
+            ],
+            order: [["delivery_batch_id", "DESC"], ["delivery_equipment_transaction_id", "ASC"]],
+        });
+
+        const history = transactions.map((transaction) => {
+            const equipmentDetails = transaction.get("equipmentDetails") as EquipmentDeliveryDetails | null;
+            const equipment        = equipmentDetails?.get("equipment") as Equipment | null | undefined;
+            const deliveredBy      = transaction.get("deliveredBy") as User | null;
+
+            return {
+                delivery_equipment_transaction_id: transaction.delivery_equipment_transaction_id,
+                delivery_batch_id:                 transaction.delivery_batch_id,
+                delivery_date:                     transaction.delivery_date,
+                delivery_equipment_type:           transaction.delivery_equipment_type,
+                is_paid:                           transaction.is_paid,
+                delivery_notes:                    transaction.delivery_notes,
+                delivery_photo_url:                transaction.delivery_photo_url,
+                equipment_name:                    equipment?.equipment_name ?? null,
+                equipment_condition:               equipmentDetails?.equipment_condition ?? null,
+                delivered_by_name:                 deliveredBy?.name ?? null,
+            };
+        });
+
+        return res.status(200).json({ data: history });
+    } catch (error) {
+        return res.status(500).json({ message: "No se pudo obtener el historial de entregas" });
     }
 };
 

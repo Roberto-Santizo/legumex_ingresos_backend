@@ -1,0 +1,30 @@
+import { Model } from "sequelize-typescript";
+import VisitStatus from "./Visit_status.model";
+import Company from "./Company.model";
+import CompanyPerson from "./CompanyPerson.model";
+import Department from "./Department.model";
+import Agent from "./Agent.model";
+import VisitCompanion from "./VisitCompanion.model";
+import User from "../AccessControl/User.model";
+export default class Visit extends Model {
+    date: Date;
+    entry_time: string;
+    visit_status_id: number;
+    visit_status: VisitStatus;
+    company_id: number;
+    company: Company;
+    company_person_id: number;
+    company_person: CompanyPerson;
+    department_id: number;
+    department: Department;
+    destination: string;
+    responsible_person: string;
+    badge_number: string;
+    license_plate: string | null;
+    exit_time: string;
+    visit_companions: VisitCompanion[];
+    agent_id: number;
+    agent: Agent;
+    created_by: number;
+    created_by_user: User;
+}

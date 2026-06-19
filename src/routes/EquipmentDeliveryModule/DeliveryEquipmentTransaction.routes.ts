@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { validateJWT, checkPermission } from '../../middleware/jwt';
 import { body, param } from 'express-validator';
 import { handleInputErrors } from '../../middleware/index';
-import { createDeliveryEquipmentTransaction, uploadFinalPhoto } from '../../handlers/EquipmentDeliveryModule/DeliveryEquipmentTransaction';
+import { createDeliveryEquipmentTransaction, uploadFinalPhoto, getDeliveryTransactionsByEmployee } from '../../handlers/EquipmentDeliveryModule/DeliveryEquipmentTransaction';
 
 const router = Router();
 
@@ -33,6 +33,14 @@ router.patch('/final-photo/:employeeBenefitedId',
     body('photo_base64').notEmpty().withMessage('La foto es requerida'),
     handleInputErrors,
     uploadFinalPhoto
+);
+
+router.get('/by-employee/:employeeBenefitedId',
+    validateJWT,
+    checkPermission('deliveryTransaction:view'),
+    param('employeeBenefitedId').isInt({ min: 1 }).withMessage('ID de empleado invalido'),
+    handleInputErrors,
+    getDeliveryTransactionsByEmployee
 );
 
 export default router;
