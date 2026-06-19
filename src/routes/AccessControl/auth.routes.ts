@@ -1,6 +1,6 @@
 import { Router } from "express"
 import { body } from "express-validator"
-import rateLimit from "express-rate-limit"
+import rateLimit, { ipKeyGenerator } from "express-rate-limit"
 import { handleInputErrors } from "../../middleware"
 import { validateJWT } from "../../middleware/jwt"
 import { login, checkStatus, refresh, logout } from "../../handlers/AccessControl/auth"
@@ -13,6 +13,11 @@ const loginLimiter = rateLimit({
     message: { statusCode: 429, message: 'Demasiados intentos de inicio de sesion, intenta de nuevo en 15 minutos' },
     standardHeaders: 'draft-7',
     legacyHeaders: false,
+    // Limita por cuenta intentada (username), no por IP compartida (proxy/red corporativa)
+    keyGenerator: (req) => {
+        const username = typeof req.body?.username === "string" ? req.body.username.toLowerCase() : ""
+        return username ? `user:${username}` : ipKeyGenerator(req.ip!)
+    },
 })
 
 
