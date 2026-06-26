@@ -91,50 +91,93 @@ export const createVisit = async (req: Request, res: Response) => {
 // Get all visits with optional filters ?date=YYYY-MM-DD&status=PROGRAMADA&name=xx&document_number=xx&page=1&limit=10
 export const getVisits = async (req: Request, res: Response) => {
     try {
-        const { date, status, name, document_number } = req.query
+        const { date, status, name, document_number, company_name } = req.query
+
         const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 10
         const offset = (page - 1) * limit
+
         const where: WhereOptions<Visit> = {}
 
         if (date) {
             const start = new Date(`${date}T00:00:00.000`)
-            const end   = new Date(`${date}T23:59:59.999`)
+            const end = new Date(`${date}T23:59:59.999`)
             where.date = { [Op.between]: [start, end] }
         }
 
         if (status) {
             const statusName = String(status).toUpperCase()
+
             if (!VISIT_STATUS_CACHE[statusName]) {
-                const found = await VisitStatus.findOne({ where: { name: statusName }, attributes: ['id'] })
-                if (found) VISIT_STATUS_CACHE[statusName] = found.id
+                const found = await VisitStatus.findOne({
+                    where: { name: statusName },
+                    attributes: ['id']
+                })
+
+                if (found) {
+                    VISIT_STATUS_CACHE[statusName] = found.id
+                }
             }
-            if (VISIT_STATUS_CACHE[statusName]) where.visit_status_id = VISIT_STATUS_CACHE[statusName]
+
+            if (VISIT_STATUS_CACHE[statusName]) {
+                where.visit_status_id = VISIT_STATUS_CACHE[statusName]
+            }
         }
 
         // Si no tiene visits:view:all, solo ve las visitas que él creó
-        const canViewAll = req.user!.permissions.includes('visits:view:all')
+        const canViewAll = req.user!.permissions.includes("visits:view:all")
+
         if (!canViewAll) {
             where.created_by = req.user!.id
         }
 
+        // Filtro por persona
         const personWhere: WhereOptions<CompanyPerson> = {}
-        if (name) personWhere.name = { [Op.iLike]: `%${name}%` }
-        if (document_number) personWhere.document_number = { [Op.iLike]: `%${document_number}%` }
+
+        if (name) {
+            personWhere.name = { [Op.iLike]: `%${name}%` }
+        }
+
+        if (document_number) {
+            personWhere.document_number = { [Op.iLike]: `%${document_number}%` }
+        }
+
         const hasPersonFilter = Object.keys(personWhere).length > 0
 
-        const activeInclude = hasPersonFilter
-            ? includeRelations.map(rel =>
-                ('as' in rel && rel.as === 'company_person')
-                    ? { ...rel, where: personWhere, required: true }
-                    : rel
-              )
-            : includeRelations
+        // Filtro por empresa
+        const companyWhere: WhereOptions<Company> = {}
+
+        if (company_name) {
+            companyWhere.name = { [Op.iLike]: `%${company_name}%` }
+        }
+
+        const hasCompanyFilter = Object.keys(companyWhere).length > 0
+
+        const activeInclude = includeRelations.map(rel => {
+
+            if ("as" in rel && rel.as === "company_person" && hasPersonFilter) {
+                return {
+                    ...rel,
+                    where: personWhere,
+                    required: true,
+                }
+            }
+
+            if ("as" in rel && rel.as === "company" && hasCompanyFilter) {
+                return {
+                    ...rel,
+                    where: companyWhere,
+                    required: true,
+                }
+            }
+
+            return rel
+        })
 
         const { count, rows } = await Visit.findAndCountAll({
             where,
             include: activeInclude,
-            order: [['createdAt', 'DESC']],
+            order: [["createdAt", "DESC"]],
             limit,
             offset,
             distinct: true,
@@ -150,16 +193,25 @@ export const getVisits = async (req: Request, res: Response) => {
             lastPage,
             limit,
         })
+
     } catch (error) {
-        console.log(error)
-        return res.status(500).json({ message: "Error al obtener las visitas" })
+        return res.status(500).json({
+            message: "Error al obtener las visitas"
+        })
     }
 }
 
 // Today's visits (agent dashboard)
 export const getVisitsToday = async (_req: Request, res: Response) => {
     try {
+        console.log("Servidor:", new Date());
+        console.log("ISO:", new Date().toISOString());
+        console.log("Timezone Offset:", new Date().getTimezoneOffset());
+
+
         const today = new Date().toISOString().split('T')[0]
+
+           console.log("today:", today);
 
         const visits = await Visit.findAll({
             where: { date: today },
