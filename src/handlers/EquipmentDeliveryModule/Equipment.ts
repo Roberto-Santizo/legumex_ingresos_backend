@@ -61,16 +61,30 @@ export const getEquipmentById = async (req:Request, res:Response) => {
     }
 }
 
-export const updateEquipment = async (req:Request, res:Response) => {
-    try{
+export const updateEquipment = async (req: Request, res: Response) => {
+    try {
         const { id } = req.params
+
         const equipment = await Equipment.findByPk(+id)
-        if(!equipment){
-            return res.status(404).json({message: "Equipo no encontrado"})
+
+        if (!equipment) {
+            return res.status(404).json({
+                message: "Equipo no encontrado"
+            })
         }
-        await equipment.update({...req.body, updated_by: req.user!.name})
-        return res.status(200).json({message: "Equipo actualizado correctamente", data: equipment})
-    }catch(error){
-        return res.status(500).json({message: "No se pudo actualizar el equipo"})
+
+        await equipment.update({
+            equipment_name: req.body.equipment_name,
+            equipment_description: req.body.equipment_description
+        })
+
+        return res.status(200).json({
+            message: "Equipo actualizado correctamente",
+            data: equipment
+        })
+    } catch (error) {
+        return res.status(500).json({
+            message: "No se pudo actualizar el equipo"
+        })
     }
 }
