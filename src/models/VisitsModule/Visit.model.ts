@@ -101,6 +101,28 @@ export default class Visit extends Model {
     })
     declare exit_time: string
 
+    // Salida temporal (ej. hora de almuerzo): momento en que el visitante salió y hora límite para regresar.
+    // Si no regresa antes de temp_exit_expected_return_at, un job de fondo finaliza la visita automáticamente.
+    @Column({
+        type: DataType.DATE,
+        allowNull: true,
+    })
+    declare temp_exit_at: Date | null
+
+    @Column({
+        type: DataType.DATE,
+        allowNull: true,
+    })
+    declare temp_exit_expected_return_at: Date | null
+
+    // true cuando el sistema finalizó la visita porque el visitante no regresó a tiempo de una salida temporal
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare auto_closed_no_return: boolean
+
     @HasMany(() => VisitCompanion)
     visit_companions: VisitCompanion[]
 

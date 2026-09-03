@@ -3,7 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cancelVisit = exports.deleteVisit = exports.updateVisit = exports.checkOut = exports.checkIn = exports.getVisitById = exports.getVisitsActive = exports.getVisitsToday = exports.getVisits = exports.createVisit = void 0;
+exports.cancelVisit = exports.deleteVisit = exports.updateVisit = exports.reingresoVisit = exports.tempExitVisit = exports.checkOut = exports.checkIn = exports.getVisitById = exports.getVisitsActive = exports.getVisitsToday = exports.getVisits = exports.createVisit = void 0;
+exports.closeExpiredTempExits = closeExpiredTempExits;
 const sequelize_1 = require("sequelize");
 const db_1 = __importDefault(require("../../config/db"));
 const VisitsModule_1 = require("../../models/VisitsModule");
@@ -29,6 +30,45 @@ const includeRelations = [
 // IDs fijos de los estados de visita (evita queries extra en cada request)
 const VISIT_STATUS_CACHE = {};
 const errorMessage = (error) => error instanceof Error ? error.message : undefined;
+// Horas permitidas para una salida temporal
+const TEMP_EXIT_ALLOWED_HOURS = [1, 2, 3, 4, 6, 8];
+// Hora actual en formato HH:mm (zona horaria de la planta), consistente con el campo TIME de entry_time/exit_time
+const currentTimeGuatemala = () => new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Guatemala",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+}).format(new Date());
+// Cierra automáticamente las visitas con salida temporal cuyo plazo de regreso ya venció.
+// Se ejecuta periódicamente (ver index.ts) y también de forma defensiva antes de listar visitas,
+// para que el estado mostrado esté siempre actualizado aunque el intervalo aún no haya corrido.
+async function closeExpiredTempExits() {
+    try {
+        const salioTemporalStatus = await VisitsModule_1.VisitStatus.findOne({ where: { name: 'SALIO TEMPORAL' } });
+        const finalizadaStatus = await VisitsModule_1.VisitStatus.findOne({ where: { name: 'FINALIZADA' } });
+        if (!salioTemporalStatus || !finalizadaStatus)
+            return;
+        const expiredVisits = await VisitsModule_1.Visit.findAll({
+            where: {
+                visit_status_id: salioTemporalStatus.id,
+                temp_exit_expected_return_at: { [sequelize_1.Op.lte]: new Date() },
+            },
+        });
+        if (expiredVisits.length === 0)
+            return;
+        const exitTime = currentTimeGuatemala();
+        for (const visit of expiredVisits) {
+            await visit.update({
+                visit_status_id: finalizadaStatus.id,
+                exit_time: exitTime,
+                auto_closed_no_return: true,
+            });
+        }
+    }
+    catch (error) {
+        console.error("Error al cerrar automáticamente visitas con salida temporal vencida:", error);
+    }
+}
 // Phase 1 - Schedule visit: visitor (company), person and date are required
 const createVisit = async (req, res) => {
     try {
@@ -89,12 +129,18 @@ exports.createVisit = createVisit;
 // Get all visits with optional filters ?date=YYYY-MM-DD&status=PROGRAMADA&name=xx&document_number=xx&page=1&limit=10
 const getVisits = async (req, res) => {
     try {
-        const { date, status, name, document_number } = req.query;
+        await closeExpiredTempExits();
+        const { date, status, name, document_number, company_name } = req.query;
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
         const where = {};
         if (date) {
+            // Con 'Z': se interpreta como UTC, igual que el string de fecha "plano" (sin hora)
+            // que createVisit guarda (JS/Sequelize lo parsea como medianoche UTC). Sin la 'Z',
+            // se interpretaba como hora local del proceso de Node, lo que en servidores fuera
+            // de UTC (ej. corriendo el backend localmente) excluía visitas recién creadas del
+            // filtro de "hoy".
             const start = new Date(`${date}T00:00:00.000Z`);
             const end = new Date(`${date}T23:59:59.999Z`);
             where.date = { [sequelize_1.Op.between]: [start, end] };
@@ -102,33 +148,59 @@ const getVisits = async (req, res) => {
         if (status) {
             const statusName = String(status).toUpperCase();
             if (!VISIT_STATUS_CACHE[statusName]) {
-                const found = await VisitsModule_1.VisitStatus.findOne({ where: { name: statusName }, attributes: ['id'] });
-                if (found)
+                const found = await VisitsModule_1.VisitStatus.findOne({
+                    where: { name: statusName },
+                    attributes: ['id']
+                });
+                if (found) {
                     VISIT_STATUS_CACHE[statusName] = found.id;
+                }
             }
-            if (VISIT_STATUS_CACHE[statusName])
+            if (VISIT_STATUS_CACHE[statusName]) {
                 where.visit_status_id = VISIT_STATUS_CACHE[statusName];
+            }
         }
         // Si no tiene visits:view:all, solo ve las visitas que él creó
-        const canViewAll = req.user.permissions.includes('visits:view:all');
+        const canViewAll = req.user.permissions.includes("visits:view:all");
         if (!canViewAll) {
             where.created_by = req.user.id;
         }
+        // Filtro por persona
         const personWhere = {};
-        if (name)
+        if (name) {
             personWhere.name = { [sequelize_1.Op.iLike]: `%${name}%` };
-        if (document_number)
+        }
+        if (document_number) {
             personWhere.document_number = { [sequelize_1.Op.iLike]: `%${document_number}%` };
+        }
         const hasPersonFilter = Object.keys(personWhere).length > 0;
-        const activeInclude = hasPersonFilter
-            ? includeRelations.map(rel => ('as' in rel && rel.as === 'company_person')
-                ? { ...rel, where: personWhere, required: true }
-                : rel)
-            : includeRelations;
+        // Filtro por empresa
+        const companyWhere = {};
+        if (company_name) {
+            companyWhere.name = { [sequelize_1.Op.iLike]: `%${company_name}%` };
+        }
+        const hasCompanyFilter = Object.keys(companyWhere).length > 0;
+        const activeInclude = includeRelations.map(rel => {
+            if ("as" in rel && rel.as === "company_person" && hasPersonFilter) {
+                return {
+                    ...rel,
+                    where: personWhere,
+                    required: true,
+                };
+            }
+            if ("as" in rel && rel.as === "company" && hasCompanyFilter) {
+                return {
+                    ...rel,
+                    where: companyWhere,
+                    required: true,
+                };
+            }
+            return rel;
+        });
         const { count, rows } = await VisitsModule_1.Visit.findAndCountAll({
             where,
             include: activeInclude,
-            order: [['createdAt', 'DESC']],
+            order: [["createdAt", "DESC"]],
             limit,
             offset,
             distinct: true,
@@ -144,15 +216,21 @@ const getVisits = async (req, res) => {
         });
     }
     catch (error) {
-        console.log(error);
-        return res.status(500).json({ message: "Error al obtener las visitas" });
+        return res.status(500).json({
+            message: "Error al obtener las visitas"
+        });
     }
 };
 exports.getVisits = getVisits;
 // Today's visits (agent dashboard)
 const getVisitsToday = async (_req, res) => {
     try {
+        await closeExpiredTempExits();
+        console.log("Servidor:", new Date());
+        console.log("ISO:", new Date().toISOString());
+        console.log("Timezone Offset:", new Date().getTimezoneOffset());
         const today = new Date().toISOString().split('T')[0];
+        console.log("today:", today);
         const visits = await VisitsModule_1.Visit.findAll({
             where: { date: today },
             include: includeRelations,
@@ -169,6 +247,7 @@ exports.getVisitsToday = getVisitsToday;
 // Visits currently inside the plant
 const getVisitsActive = async (_req, res) => {
     try {
+        await closeExpiredTempExits();
         const status = await VisitsModule_1.VisitStatus.findOne({ where: { name: 'EN PLANTA' } });
         if (!status) {
             return res.status(500).json({ message: "Estado 'EN PLANTA' no encontrado" });
@@ -352,7 +431,11 @@ const checkOut = async (req, res) => {
         if (!status) {
             return res.status(500).json({ message: "Estado 'FINALIZADA' no encontrado" });
         }
-        await visit.update({ exit_time, visit_status_id: status.id });
+        await visit.update({
+            exit_time,
+            visit_status_id: status.id,
+            temp_exit_expected_return_at: null,
+        });
         return res.status(200).json({ message: "Check-out realizado correctamente", data: visit });
     }
     catch (error) {
@@ -361,6 +444,72 @@ const checkOut = async (req, res) => {
     }
 };
 exports.checkOut = checkOut;
+// Salida temporal: el visitante sale de la planta (ej. hora de almuerzo) por un número de horas definido.
+// Body: { hours: number } — si no regresa (reingreso) antes de ese plazo, closeExpiredTempExits() finaliza la visita.
+const tempExitVisit = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const visit = await VisitsModule_1.Visit.findByPk(+id);
+        if (!visit) {
+            return res.status(404).json({ message: "Visita no encontrada" });
+        }
+        const enPlantaStatus = await VisitsModule_1.VisitStatus.findOne({ where: { name: 'EN PLANTA' } });
+        if (!enPlantaStatus || visit.visit_status_id !== enPlantaStatus.id) {
+            return res.status(400).json({ message: "Solo se puede registrar una salida temporal de visitas en estado EN PLANTA" });
+        }
+        const hours = Number(req.body.hours);
+        if (!TEMP_EXIT_ALLOWED_HOURS.includes(hours)) {
+            return res.status(400).json({ message: `El número de horas debe ser uno de: ${TEMP_EXIT_ALLOWED_HOURS.join(', ')}` });
+        }
+        const salioTemporalStatus = await VisitsModule_1.VisitStatus.findOne({ where: { name: 'SALIO TEMPORAL' } });
+        if (!salioTemporalStatus) {
+            return res.status(500).json({ message: "Estado 'SALIO TEMPORAL' no encontrado" });
+        }
+        const now = new Date();
+        const expectedReturnAt = new Date(now.getTime() + hours * 60 * 60 * 1000);
+        await visit.update({
+            visit_status_id: salioTemporalStatus.id,
+            temp_exit_at: now,
+            temp_exit_expected_return_at: expectedReturnAt,
+        });
+        const updatedVisit = await VisitsModule_1.Visit.findByPk(+id, { include: includeRelations });
+        return res.status(200).json({ message: `Salida temporal registrada. Debe regresar antes de ${hours} hora(s).`, data: updatedVisit });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Error al registrar la salida temporal" });
+    }
+};
+exports.tempExitVisit = tempExitVisit;
+// Reingreso: el visitante regresó a la planta antes de que venciera su salida temporal
+const reingresoVisit = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const visit = await VisitsModule_1.Visit.findByPk(+id);
+        if (!visit) {
+            return res.status(404).json({ message: "Visita no encontrada" });
+        }
+        const salioTemporalStatus = await VisitsModule_1.VisitStatus.findOne({ where: { name: 'SALIO TEMPORAL' } });
+        if (!salioTemporalStatus || visit.visit_status_id !== salioTemporalStatus.id) {
+            return res.status(400).json({ message: "Solo se puede registrar el reingreso de visitas en estado SALIO TEMPORAL" });
+        }
+        const enPlantaStatus = await VisitsModule_1.VisitStatus.findOne({ where: { name: 'EN PLANTA' } });
+        if (!enPlantaStatus) {
+            return res.status(500).json({ message: "Estado 'EN PLANTA' no encontrado" });
+        }
+        await visit.update({
+            visit_status_id: enPlantaStatus.id,
+            temp_exit_expected_return_at: null,
+        });
+        const updatedVisit = await VisitsModule_1.Visit.findByPk(+id, { include: includeRelations });
+        return res.status(200).json({ message: "Reingreso registrado correctamente", data: updatedVisit });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Error al registrar el reingreso" });
+    }
+};
+exports.reingresoVisit = reingresoVisit;
 // Update visit (only when PROGRAMADA) - edit fields and replace companions list
 const updateVisit = async (req, res) => {
     try {

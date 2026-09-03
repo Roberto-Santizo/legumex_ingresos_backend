@@ -113,6 +113,7 @@ async function runSeeders() {
     await VisitsModule_1.VisitStatus.bulkCreate([
         { name: 'PROGRAMADA' },
         { name: 'EN PLANTA' },
+        { name: 'SALIO TEMPORAL' },
         { name: 'FINALIZADA' },
         { name: 'CANCELADA' },
     ], { ignoreDuplicates: true });

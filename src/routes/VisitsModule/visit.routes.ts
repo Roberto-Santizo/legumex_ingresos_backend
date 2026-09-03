@@ -12,6 +12,8 @@ import {
     checkIn,
     checkOut,
     cancelVisit,
+    tempExitVisit,
+    reingresoVisit,
 } from "../../handlers/VisitsModule/visit"
 import { validateJWT, checkPermission } from "../../middleware/jwt"
 
@@ -64,6 +66,22 @@ router.patch("/:id/checkout",
     param("id").isInt().withMessage("Id no válido"),
     handleInputErrors,
     checkOut
+)
+
+router.patch("/:id/temp-exit",
+    validateJWT,
+    checkPermission('visits:checkout'),
+    param("id").isInt().withMessage("Id no válido"),
+    handleInputErrors,
+    tempExitVisit
+)
+
+router.patch("/:id/reingreso",
+    validateJWT,
+    checkPermission('visits:checkin'),
+    param("id").isInt().withMessage("Id no válido"),
+    handleInputErrors,
+    reingresoVisit
 )
 
 router.patch("/:id/cancel",

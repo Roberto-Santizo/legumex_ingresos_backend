@@ -121,6 +121,7 @@ export async function runSeeders() {
         [
             { name: 'PROGRAMADA' },
             { name: 'EN PLANTA' },
+            { name: 'SALIO TEMPORAL' },
             { name: 'FINALIZADA' },
             { name: 'CANCELADA' },
         ],

@@ -46,9 +46,7 @@ const loginLimiter = (0, express_rate_limit_1.default)({
     message: { statusCode: 429, message: 'Demasiados intentos de inicio de sesion, intenta de nuevo en 15 minutos' },
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    // Solo cuenta intentos fallidos, igual que el contador de bloqueo de cuenta en la BD
     skipSuccessfulRequests: true,
-    // Limita por cuenta intentada (username), no por IP compartida (proxy/red corporativa)
     keyGenerator: (req) => {
         const username = typeof req.body?.username === "string" ? req.body.username.toLowerCase() : "";
         return username ? `user:${username}` : (0, express_rate_limit_1.ipKeyGenerator)(req.ip);

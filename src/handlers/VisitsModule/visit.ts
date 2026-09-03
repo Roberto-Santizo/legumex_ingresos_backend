@@ -29,6 +29,50 @@ const VISIT_STATUS_CACHE: Record<string, number> = {}
 const errorMessage = (error: unknown): string | undefined =>
     error instanceof Error ? error.message : undefined
 
+// Horas permitidas para una salida temporal
+const TEMP_EXIT_ALLOWED_HOURS = [1, 2, 3, 4, 6, 8]
+
+// Hora actual en formato HH:mm (zona horaria de la planta), consistente con el campo TIME de entry_time/exit_time
+const currentTimeGuatemala = (): string =>
+    new Intl.DateTimeFormat("en-GB", {
+        timeZone: "America/Guatemala",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    }).format(new Date())
+
+// Cierra automáticamente las visitas con salida temporal cuyo plazo de regreso ya venció.
+// Se ejecuta periódicamente (ver index.ts) y también de forma defensiva antes de listar visitas,
+// para que el estado mostrado esté siempre actualizado aunque el intervalo aún no haya corrido.
+export async function closeExpiredTempExits() {
+    try {
+        const salioTemporalStatus = await VisitStatus.findOne({ where: { name: 'SALIO TEMPORAL' } })
+        const finalizadaStatus = await VisitStatus.findOne({ where: { name: 'FINALIZADA' } })
+        if (!salioTemporalStatus || !finalizadaStatus) return
+
+        const expiredVisits = await Visit.findAll({
+            where: {
+                visit_status_id: salioTemporalStatus.id,
+                temp_exit_expected_return_at: { [Op.lte]: new Date() },
+            },
+        })
+
+        if (expiredVisits.length === 0) return
+
+        const exitTime = currentTimeGuatemala()
+
+        for (const visit of expiredVisits) {
+            await visit.update({
+                visit_status_id: finalizadaStatus.id,
+                exit_time: exitTime,
+                auto_closed_no_return: true,
+            })
+        }
+    } catch (error) {
+        console.error("Error al cerrar automáticamente visitas con salida temporal vencida:", error)
+    }
+}
+
 // Phase 1 - Schedule visit: visitor (company), person and date are required
 export const createVisit = async (req: Request, res: Response) => {
     try {
@@ -91,7 +135,9 @@ export const createVisit = async (req: Request, res: Response) => {
 // Get all visits with optional filters ?date=YYYY-MM-DD&status=PROGRAMADA&name=xx&document_number=xx&page=1&limit=10
 export const getVisits = async (req: Request, res: Response) => {
     try {
-        const { date, status, name, document_number, company_name } = req.query
+        await closeExpiredTempExits()
+
+        const { date, status, exclude_status, name, document_number, company_name } = req.query
 
         const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 10
@@ -99,28 +145,42 @@ export const getVisits = async (req: Request, res: Response) => {
 
         const where: WhereOptions<Visit> = {}
 
+        // Resuelve el id de un estado por nombre, cacheado en memoria para evitar queries repetidas
+        const resolveStatusId = async (statusName: string): Promise<number | undefined> => {
+            const key = statusName.toUpperCase()
+            if (!VISIT_STATUS_CACHE[key]) {
+                const found = await VisitStatus.findOne({ where: { name: key }, attributes: ['id'] })
+                if (found) VISIT_STATUS_CACHE[key] = found.id
+            }
+            return VISIT_STATUS_CACHE[key]
+        }
+
         if (date) {
-            const start = new Date(`${date}T00:00:00.000`)
-            const end = new Date(`${date}T23:59:59.999`)
+            // Con 'Z': se interpreta como UTC, igual que el string de fecha "plano" (sin hora)
+            // que createVisit guarda (JS/Sequelize lo parsea como medianoche UTC). Sin la 'Z',
+            // se interpretaba como hora local del proceso de Node, lo que en servidores fuera
+            // de UTC (ej. corriendo el backend localmente) excluía visitas recién creadas del
+            // filtro de "hoy".
+            const start = new Date(`${date}T00:00:00.000Z`)
+            const end = new Date(`${date}T23:59:59.999Z`)
             where.date = { [Op.between]: [start, end] }
         }
 
         if (status) {
-            const statusName = String(status).toUpperCase()
-
-            if (!VISIT_STATUS_CACHE[statusName]) {
-                const found = await VisitStatus.findOne({
-                    where: { name: statusName },
-                    attributes: ['id']
-                })
-
-                if (found) {
-                    VISIT_STATUS_CACHE[statusName] = found.id
-                }
+            const statusId = await resolveStatusId(String(status))
+            if (statusId) {
+                where.visit_status_id = statusId
             }
+        }
 
-            if (VISIT_STATUS_CACHE[statusName]) {
-                where.visit_status_id = VISIT_STATUS_CACHE[statusName]
+        // Excluye una o varias visit_status (ej. "FINALIZADA" o "FINALIZADA,CANCELADA") de la lista
+        if (exclude_status) {
+            const excludedNames = String(exclude_status).split(',').map(s => s.trim()).filter(Boolean)
+            const excludedIds = (await Promise.all(excludedNames.map(resolveStatusId)))
+                .filter((id): id is number => id !== undefined)
+
+            if (excludedIds.length > 0) {
+                where.visit_status_id = { [Op.notIn]: excludedIds }
             }
         }
 
@@ -204,6 +264,8 @@ export const getVisits = async (req: Request, res: Response) => {
 // Today's visits (agent dashboard)
 export const getVisitsToday = async (_req: Request, res: Response) => {
     try {
+        await closeExpiredTempExits()
+
         console.log("Servidor:", new Date());
         console.log("ISO:", new Date().toISOString());
         console.log("Timezone Offset:", new Date().getTimezoneOffset());
@@ -229,6 +291,8 @@ export const getVisitsToday = async (_req: Request, res: Response) => {
 // Visits currently inside the plant
 export const getVisitsActive = async (_req: Request, res: Response) => {
     try {
+        await closeExpiredTempExits()
+
         const status = await VisitStatus.findOne({ where: { name: 'EN PLANTA' } })
         if (!status) {
             return res.status(500).json({ message: "Estado 'EN PLANTA' no encontrado" })
@@ -428,12 +492,90 @@ export const checkOut = async (req: Request, res: Response) => {
             return res.status(500).json({ message: "Estado 'FINALIZADA' no encontrado" })
         }
 
-        await visit.update({ exit_time, visit_status_id: status.id })
+        await visit.update({
+            exit_time,
+            visit_status_id: status.id,
+            temp_exit_expected_return_at: null,
+        })
 
         return res.status(200).json({ message: "Check-out realizado correctamente", data: visit })
     } catch (error) {
         console.log(error)
         return res.status(500).json({ message: "Error al realizar el check-out" })
+    }
+}
+
+// Salida temporal: el visitante sale de la planta (ej. hora de almuerzo) por un número de horas definido.
+// Body: { hours: number } — si no regresa (reingreso) antes de ese plazo, closeExpiredTempExits() finaliza la visita.
+export const tempExitVisit = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params
+        const visit = await Visit.findByPk(+id)
+        if (!visit) {
+            return res.status(404).json({ message: "Visita no encontrada" })
+        }
+
+        const enPlantaStatus = await VisitStatus.findOne({ where: { name: 'EN PLANTA' } })
+        if (!enPlantaStatus || visit.visit_status_id !== enPlantaStatus.id) {
+            return res.status(400).json({ message: "Solo se puede registrar una salida temporal de visitas en estado EN PLANTA" })
+        }
+
+        const hours = Number(req.body.hours)
+        if (!TEMP_EXIT_ALLOWED_HOURS.includes(hours)) {
+            return res.status(400).json({ message: `El número de horas debe ser uno de: ${TEMP_EXIT_ALLOWED_HOURS.join(', ')}` })
+        }
+
+        const salioTemporalStatus = await VisitStatus.findOne({ where: { name: 'SALIO TEMPORAL' } })
+        if (!salioTemporalStatus) {
+            return res.status(500).json({ message: "Estado 'SALIO TEMPORAL' no encontrado" })
+        }
+
+        const now = new Date()
+        const expectedReturnAt = new Date(now.getTime() + hours * 60 * 60 * 1000)
+
+        await visit.update({
+            visit_status_id: salioTemporalStatus.id,
+            temp_exit_at: now,
+            temp_exit_expected_return_at: expectedReturnAt,
+        })
+
+        const updatedVisit = await Visit.findByPk(+id, { include: includeRelations })
+        return res.status(200).json({ message: `Salida temporal registrada. Debe regresar antes de ${hours} hora(s).`, data: updatedVisit })
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({ message: "Error al registrar la salida temporal" })
+    }
+}
+
+// Reingreso: el visitante regresó a la planta antes de que venciera su salida temporal
+export const reingresoVisit = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params
+        const visit = await Visit.findByPk(+id)
+        if (!visit) {
+            return res.status(404).json({ message: "Visita no encontrada" })
+        }
+
+        const salioTemporalStatus = await VisitStatus.findOne({ where: { name: 'SALIO TEMPORAL' } })
+        if (!salioTemporalStatus || visit.visit_status_id !== salioTemporalStatus.id) {
+            return res.status(400).json({ message: "Solo se puede registrar el reingreso de visitas en estado SALIO TEMPORAL" })
+        }
+
+        const enPlantaStatus = await VisitStatus.findOne({ where: { name: 'EN PLANTA' } })
+        if (!enPlantaStatus) {
+            return res.status(500).json({ message: "Estado 'EN PLANTA' no encontrado" })
+        }
+
+        await visit.update({
+            visit_status_id: enPlantaStatus.id,
+            temp_exit_expected_return_at: null,
+        })
+
+        const updatedVisit = await Visit.findByPk(+id, { include: includeRelations })
+        return res.status(200).json({ message: "Reingreso registrado correctamente", data: updatedVisit })
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({ message: "Error al registrar el reingreso" })
     }
 }
 

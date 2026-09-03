@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+export declare function closeExpiredTempExits(): Promise<void>;
 export declare const createVisit: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getVisits: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const getVisitsToday: (_req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
@@ -6,6 +7,8 @@ export declare const getVisitsActive: (_req: Request, res: Response) => Promise<
 export declare const getVisitById: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const checkIn: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const checkOut: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const tempExitVisit: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const reingresoVisit: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const updateVisit: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const deleteVisit: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const cancelVisit: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;

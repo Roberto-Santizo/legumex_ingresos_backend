@@ -61,6 +61,7 @@ export const getVisitsExcelReport = async (req: Request, res: Response) => {
             { header: "Hora de Ingreso",       key: "hora_ingreso",       width: 15 },
             { header: "Hora de Salida",        key: "hora_salida",        width: 15 },
             { header: "Fecha de Salida",       key: "fecha_salida",       width: 16 },
+            { header: "Cierre Automático",     key: "cierre_automatico",  width: 22 },
         ]
 
         // Header row styles
@@ -126,6 +127,7 @@ export const getVisitsExcelReport = async (req: Request, res: Response) => {
                 hora_ingreso:     visit.entry_time                 ?? "",
                 hora_salida:      visit.exit_time                  || "Aún en planta",
                 fecha_salida:     fecha_salida                     || "-",
+                cierre_automatico: visit.auto_closed_no_return     ? "Sí (no regresó de salida temporal)" : "-",
             })
 
             // Border on each data cell

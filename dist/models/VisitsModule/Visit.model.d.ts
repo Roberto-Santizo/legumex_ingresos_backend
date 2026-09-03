@@ -22,6 +22,9 @@ export default class Visit extends Model {
     badge_number: string;
     license_plate: string | null;
     exit_time: string;
+    temp_exit_at: Date | null;
+    temp_exit_expected_return_at: Date | null;
+    auto_closed_no_return: boolean;
     visit_companions: VisitCompanion[];
     agent_id: number;
     agent: Agent;

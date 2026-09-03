@@ -128,6 +128,28 @@ __decorate([
     __metadata("design:type", String)
 ], Visit.prototype, "exit_time", void 0);
 __decorate([
+    (0, sequelize_typescript_1.Column)({
+        type: sequelize_typescript_1.DataType.DATE,
+        allowNull: true,
+    }),
+    __metadata("design:type", Date)
+], Visit.prototype, "temp_exit_at", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({
+        type: sequelize_typescript_1.DataType.DATE,
+        allowNull: true,
+    }),
+    __metadata("design:type", Date)
+], Visit.prototype, "temp_exit_expected_return_at", void 0);
+__decorate([
+    (0, sequelize_typescript_1.Column)({
+        type: sequelize_typescript_1.DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    }),
+    __metadata("design:type", Boolean)
+], Visit.prototype, "auto_closed_no_return", void 0);
+__decorate([
     (0, sequelize_typescript_1.HasMany)(() => VisitCompanion_model_1.default),
     __metadata("design:type", Array)
 ], Visit.prototype, "visit_companions", void 0);
