@@ -12,7 +12,7 @@
 // ── Mocks ──────────────────────────────────────────────────────────────────────
 
 jest.mock('../config/db', () => ({ __esModule: true, default: { transaction: jest.fn() } }))
-jest.mock('../models/VisitsModule/Visit.model',         () => ({ __esModule: true, default: { findAll: jest.fn(), findAndCountAll: jest.fn(), findByPk: jest.fn(), findOne: jest.fn() } }))
+jest.mock('../models/VisitsModule/Visit.model',         () => ({ __esModule: true, default: { update: jest.fn().mockResolvedValue([0]), findAll: jest.fn(), findAndCountAll: jest.fn(), findByPk: jest.fn(), findOne: jest.fn() } }))
 jest.mock('../models/VisitsModule/Visit_status.model',  () => ({ __esModule: true, default: { findOne: jest.fn() } }))
 jest.mock('../models/VisitsModule/VisitCompanion.model', () => ({ __esModule: true, default: {} }))
 jest.mock('../models/VisitsModule/CompanyPerson.model', () => ({ __esModule: true, default: {} }))

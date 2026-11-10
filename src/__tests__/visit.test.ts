@@ -22,7 +22,7 @@ jest.mock('../config/db', () => ({
 
 jest.mock('../models/VisitsModule/Visit.model', () => ({
     __esModule: true,
-    default: { create: jest.fn(), findAll: jest.fn(), findAndCountAll: jest.fn(), findOne: jest.fn(), findByPk: jest.fn() },
+    default: { create: jest.fn(), update: jest.fn().mockResolvedValue([0]), findAll: jest.fn(), findAndCountAll: jest.fn(), findOne: jest.fn(), findByPk: jest.fn() },
 }))
 
 jest.mock('../models/VisitsModule/Visit_status.model', () => ({
@@ -50,7 +50,8 @@ jest.mock('../models/VisitsModule/Agent.model',      () => ({ __esModule: true, 
 // ── Imports ────────────────────────────────────────────────────────────────────
 
 import type { Request, Response } from 'express'
-import {createVisit,getVisits,getVisitById,checkIn,checkOut,cancelVisit} from '../handlers/VisitsModule/visit'
+import {createVisit,getVisits,getVisitById,checkIn,checkOut,cancelVisit,reingresoVisit,closeExpiredTempExits} from '../handlers/VisitsModule/visit'
+import { Op, literal } from 'sequelize'
 import Visit         from '../models/VisitsModule/Visit.model'
 import VisitStatus   from '../models/VisitsModule/Visit_status.model'
 import db            from '../config/db'
@@ -69,6 +70,16 @@ const adminUser = {
         'visits:checkin', 'visits:checkout', 'visits:cancel',
     ],
 }
+
+afterEach(() => {
+    // Los fallos del cierre automático se registran y no deben pasar inadvertidos.
+    expect(console.error).not.toHaveBeenCalled()
+    jest.restoreAllMocks()
+})
+
+beforeEach(() => {
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+})
 
 // req() builds a minimal Express Request object.
 // Pass overrides to set body, params, query, or a different user.
@@ -531,5 +542,135 @@ describe('cancelVisit', () => {
 
         // Assert: 404 Not Found.
         expect(r.status).toHaveBeenCalledWith(404)
+    })
+})
+
+describe('temporary exit expiration and reentry', () => {
+    const now = new Date('2026-11-10T18:00:00.000Z')
+    const deadline = new Date('2026-11-10T19:00:00.000Z')
+    const statuses: Record<string, number> = {
+        'SALIO TEMPORAL': 5,
+        'EN PLANTA': 2,
+        'FINALIZADA': 3,
+    }
+
+    beforeEach(() => {
+        jest.resetAllMocks()
+        jest.useFakeTimers().setSystemTime(now)
+        ;(VisitStatus.findOne as jest.Mock).mockImplementation(({ where }) =>
+            Promise.resolve({ id: statuses[where.name], name: where.name })
+        )
+        ;(Visit.findByPk as jest.Mock).mockResolvedValue({
+            id: 1,
+            visit_status_id: 5,
+            temp_exit_expected_return_at: deadline,
+        })
+        ;(Visit.update as jest.Mock).mockResolvedValue([1])
+    })
+
+    afterEach(() => jest.useRealTimers())
+
+    it('closes only visits that are still temporarily out and expired when written', async () => {
+        await closeExpiredTempExits()
+
+        expect(Visit.update).toHaveBeenCalledTimes(1)
+        expect(Visit.update).toHaveBeenCalledWith({
+            visit_status_id: 3,
+            exit_time: '12:00',
+            auto_closed_no_return: true,
+        }, {
+            where: {
+                visit_status_id: 5,
+                temp_exit_expected_return_at: { [Op.lte]: now },
+            },
+        })
+        // No se cargan instancias que puedan quedar desactualizadas antes de guardar.
+        expect(Visit.findAll).not.toHaveBeenCalled()
+    })
+
+    it('does not close visits when the required status is missing', async () => {
+        ;(VisitStatus.findOne as jest.Mock).mockResolvedValueOnce(null)
+
+        await closeExpiredTempExits()
+
+        expect(Visit.update).not.toHaveBeenCalled()
+    })
+
+    it.each([
+        ['past deadline', new Date('2026-11-10T17:59:59.999Z')],
+        ['exact deadline', now],
+        ['missing deadline', null],
+    ])('rejects reentry with %s even before the background job runs', async (_label, expectedReturnAt) => {
+        ;(Visit.findByPk as jest.Mock).mockResolvedValue({
+            id: 1, visit_status_id: 5, temp_exit_expected_return_at: expectedReturnAt,
+        })
+        const response = res()
+
+        await reingresoVisit(req({ params: { id: '1' } }) as Request, response as unknown as Response)
+
+        expect(response.status).toHaveBeenCalledWith(400)
+        expect(Visit.update).not.toHaveBeenCalled()
+    })
+
+    it('allows reentry before the deadline with an atomic status and deadline check', async () => {
+        const updatedVisit = { id: 1, visit_status_id: 2, temp_exit_expected_return_at: null }
+        ;(Visit.findByPk as jest.Mock).mockResolvedValueOnce({
+            id: 1, visit_status_id: 5, temp_exit_expected_return_at: deadline,
+        }).mockResolvedValueOnce(updatedVisit)
+        const response = res()
+
+        await reingresoVisit(req({ params: { id: '1' } }) as Request, response as unknown as Response)
+
+        expect(Visit.update).toHaveBeenCalledWith({
+            visit_status_id: 2,
+            temp_exit_expected_return_at: null,
+        }, {
+            where: {
+                id: 1,
+                visit_status_id: 5,
+                temp_exit_expected_return_at: {
+                    [Op.eq]: deadline,
+                    [Op.gt]: literal('clock_timestamp()'),
+                },
+            },
+        })
+        expect(response.status).toHaveBeenCalledWith(200)
+        expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ data: updatedVisit }))
+    })
+
+    it('returns a conflict when another request changed the visit before the update', async () => {
+        ;(Visit.update as jest.Mock).mockResolvedValue([0])
+        const response = res()
+
+        await reingresoVisit(req({ params: { id: '1' } }) as Request, response as unknown as Response)
+
+        expect(response.status).toHaveBeenCalledWith(409)
+        expect(Visit.findByPk).toHaveBeenCalledTimes(1)
+    })
+
+    it('checks the database clock if the deadline expires while processing reentry', async () => {
+        ;(VisitStatus.findOne as jest.Mock).mockImplementation(({ where }) => {
+            if (where.name === 'EN PLANTA') jest.setSystemTime(deadline)
+            return Promise.resolve({ id: statuses[where.name], name: where.name })
+        })
+        // La condición de tiempo del UPDATE ya no coincide y la BD no escribe.
+        ;(Visit.update as jest.Mock).mockResolvedValue([0])
+        const response = res()
+
+        await reingresoVisit(req({ params: { id: '1' } }) as Request, response as unknown as Response)
+
+        const options = (Visit.update as jest.Mock).mock.calls[0][1]
+        expect(options.where.temp_exit_expected_return_at[Op.gt]).toEqual(literal('clock_timestamp()'))
+        expect(response.status).toHaveBeenCalledWith(409)
+    })
+
+    it('rejects reentry for a visit that was already finalized', async () => {
+        ;(Visit.findByPk as jest.Mock).mockResolvedValue({ id: 1, visit_status_id: 3 })
+        const response = res()
+
+        await reingresoVisit(req({ params: { id: '1' } }) as Request, response as unknown as Response)
+
+        expect(response.status).toHaveBeenCalledWith(400)
+        expect(Visit.update).not.toHaveBeenCalled()
     })
 })

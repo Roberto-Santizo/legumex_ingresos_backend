@@ -50,24 +50,17 @@ export async function closeExpiredTempExits() {
         const finalizadaStatus = await VisitStatus.findOne({ where: { name: 'FINALIZADA' } })
         if (!salioTemporalStatus || !finalizadaStatus) return
 
-        const expiredVisits = await Visit.findAll({
+        // El filtro se evalúa al escribir: un reingreso concurrente deja de cumplirlo.
+        await Visit.update({
+            visit_status_id: finalizadaStatus.id,
+            exit_time: currentTimeGuatemala(),
+            auto_closed_no_return: true,
+        }, {
             where: {
                 visit_status_id: salioTemporalStatus.id,
                 temp_exit_expected_return_at: { [Op.lte]: new Date() },
             },
         })
-
-        if (expiredVisits.length === 0) return
-
-        const exitTime = currentTimeGuatemala()
-
-        for (const visit of expiredVisits) {
-            await visit.update({
-                visit_status_id: finalizadaStatus.id,
-                exit_time: exitTime,
-                auto_closed_no_return: true,
-            })
-        }
     } catch (error) {
         console.error("Error al cerrar automáticamente visitas con salida temporal vencida:", error)
     }
@@ -561,15 +554,36 @@ export const reingresoVisit = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Solo se puede registrar el reingreso de visitas en estado SALIO TEMPORAL" })
         }
 
+        const expectedReturnAt = visit.temp_exit_expected_return_at
+        if (!expectedReturnAt || expectedReturnAt.getTime() <= Date.now()) {
+            return res.status(400).json({ message: "El plazo de la salida temporal ya venció o no está definido" })
+        }
+
         const enPlantaStatus = await VisitStatus.findOne({ where: { name: 'EN PLANTA' } })
         if (!enPlantaStatus) {
             return res.status(500).json({ message: "Estado 'EN PLANTA' no encontrado" })
         }
 
-        await visit.update({
+        // Verificar estado y plazo en el mismo UPDATE evita reabrir una visita
+        // que el cierre automático u otra solicitud ya modificaron.
+        const [updatedCount] = await Visit.update({
             visit_status_id: enPlantaStatus.id,
             temp_exit_expected_return_at: null,
+        }, {
+            where: {
+                id: +id,
+                visit_status_id: salioTemporalStatus.id,
+                temp_exit_expected_return_at: {
+                    [Op.eq]: expectedReturnAt,
+                    // Reloj real de PostgreSQL, incluso tras esperar un bloqueo.
+                    [Op.gt]: literal('clock_timestamp()'),
+                },
+            },
         })
+
+        if (updatedCount === 0) {
+            return res.status(409).json({ message: "La visita cambió de estado o venció el plazo de reingreso. Actualiza la información e intenta de nuevo" })
+        }
 
         const updatedVisit = await Visit.findByPk(+id, { include: includeRelations })
         return res.status(200).json({ message: "Reingreso registrado correctamente", data: updatedVisit })

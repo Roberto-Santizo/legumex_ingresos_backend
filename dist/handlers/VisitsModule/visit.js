@@ -48,22 +48,17 @@ async function closeExpiredTempExits() {
         const finalizadaStatus = await VisitsModule_1.VisitStatus.findOne({ where: { name: 'FINALIZADA' } });
         if (!salioTemporalStatus || !finalizadaStatus)
             return;
-        const expiredVisits = await VisitsModule_1.Visit.findAll({
+        // El filtro se evalúa al escribir: un reingreso concurrente deja de cumplirlo.
+        await VisitsModule_1.Visit.update({
+            visit_status_id: finalizadaStatus.id,
+            exit_time: currentTimeGuatemala(),
+            auto_closed_no_return: true,
+        }, {
             where: {
                 visit_status_id: salioTemporalStatus.id,
                 temp_exit_expected_return_at: { [sequelize_1.Op.lte]: new Date() },
             },
         });
-        if (expiredVisits.length === 0)
-            return;
-        const exitTime = currentTimeGuatemala();
-        for (const visit of expiredVisits) {
-            await visit.update({
-                visit_status_id: finalizadaStatus.id,
-                exit_time: exitTime,
-                auto_closed_no_return: true,
-            });
-        }
     }
     catch (error) {
         console.error("Error al cerrar automáticamente visitas con salida temporal vencida:", error);
@@ -130,11 +125,21 @@ exports.createVisit = createVisit;
 const getVisits = async (req, res) => {
     try {
         await closeExpiredTempExits();
-        const { date, status, name, document_number, company_name } = req.query;
+        const { date, status, exclude_status, name, document_number, company_name } = req.query;
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
         const where = {};
+        // Resuelve el id de un estado por nombre, cacheado en memoria para evitar queries repetidas
+        const resolveStatusId = async (statusName) => {
+            const key = statusName.toUpperCase();
+            if (!VISIT_STATUS_CACHE[key]) {
+                const found = await VisitsModule_1.VisitStatus.findOne({ where: { name: key }, attributes: ['id'] });
+                if (found)
+                    VISIT_STATUS_CACHE[key] = found.id;
+            }
+            return VISIT_STATUS_CACHE[key];
+        };
         if (date) {
             // Con 'Z': se interpreta como UTC, igual que el string de fecha "plano" (sin hora)
             // que createVisit guarda (JS/Sequelize lo parsea como medianoche UTC). Sin la 'Z',
@@ -146,18 +151,18 @@ const getVisits = async (req, res) => {
             where.date = { [sequelize_1.Op.between]: [start, end] };
         }
         if (status) {
-            const statusName = String(status).toUpperCase();
-            if (!VISIT_STATUS_CACHE[statusName]) {
-                const found = await VisitsModule_1.VisitStatus.findOne({
-                    where: { name: statusName },
-                    attributes: ['id']
-                });
-                if (found) {
-                    VISIT_STATUS_CACHE[statusName] = found.id;
-                }
+            const statusId = await resolveStatusId(String(status));
+            if (statusId) {
+                where.visit_status_id = statusId;
             }
-            if (VISIT_STATUS_CACHE[statusName]) {
-                where.visit_status_id = VISIT_STATUS_CACHE[statusName];
+        }
+        // Excluye una o varias visit_status (ej. "FINALIZADA" o "FINALIZADA,CANCELADA") de la lista
+        if (exclude_status) {
+            const excludedNames = String(exclude_status).split(',').map(s => s.trim()).filter(Boolean);
+            const excludedIds = (await Promise.all(excludedNames.map(resolveStatusId)))
+                .filter((id) => id !== undefined);
+            if (excludedIds.length > 0) {
+                where.visit_status_id = { [sequelize_1.Op.notIn]: excludedIds };
             }
         }
         // Si no tiene visits:view:all, solo ve las visitas que él creó
@@ -493,14 +498,33 @@ const reingresoVisit = async (req, res) => {
         if (!salioTemporalStatus || visit.visit_status_id !== salioTemporalStatus.id) {
             return res.status(400).json({ message: "Solo se puede registrar el reingreso de visitas en estado SALIO TEMPORAL" });
         }
+        const expectedReturnAt = visit.temp_exit_expected_return_at;
+        if (!expectedReturnAt || expectedReturnAt.getTime() <= Date.now()) {
+            return res.status(400).json({ message: "El plazo de la salida temporal ya venció o no está definido" });
+        }
         const enPlantaStatus = await VisitsModule_1.VisitStatus.findOne({ where: { name: 'EN PLANTA' } });
         if (!enPlantaStatus) {
             return res.status(500).json({ message: "Estado 'EN PLANTA' no encontrado" });
         }
-        await visit.update({
+        // Verificar estado y plazo en el mismo UPDATE evita reabrir una visita
+        // que el cierre automático u otra solicitud ya modificaron.
+        const [updatedCount] = await VisitsModule_1.Visit.update({
             visit_status_id: enPlantaStatus.id,
             temp_exit_expected_return_at: null,
+        }, {
+            where: {
+                id: +id,
+                visit_status_id: salioTemporalStatus.id,
+                temp_exit_expected_return_at: {
+                    [sequelize_1.Op.eq]: expectedReturnAt,
+                    // Reloj real de PostgreSQL, incluso tras esperar un bloqueo.
+                    [sequelize_1.Op.gt]: (0, sequelize_1.literal)('clock_timestamp()'),
+                },
+            },
         });
+        if (updatedCount === 0) {
+            return res.status(409).json({ message: "La visita cambió de estado o venció el plazo de reingreso. Actualiza la información e intenta de nuevo" });
+        }
         const updatedVisit = await VisitsModule_1.Visit.findByPk(+id, { include: includeRelations });
         return res.status(200).json({ message: "Reingreso registrado correctamente", data: updatedVisit });
     }

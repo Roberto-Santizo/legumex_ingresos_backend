@@ -81,7 +81,11 @@ __decorate([
 ], CompanyPerson.prototype, "visit_companions", void 0);
 CompanyPerson = __decorate([
     (0, sequelize_typescript_1.Table)({
-        tableName: 'company_person'
+        tableName: 'company_person',
+        indexes: [
+            // company_id se almacena en la columna legada visitor_id.
+            { name: 'company_person_company_name_idx', fields: ['visitor_id', 'name'] },
+        ],
     })
 ], CompanyPerson);
 exports.default = CompanyPerson;

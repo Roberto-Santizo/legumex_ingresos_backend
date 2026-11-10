@@ -77,13 +77,15 @@ export const getCompanyPersonById = async (req: Request, res: Response) => {
     }
 }
 
-// Listar personas de una empresa especifica (util para el dropdown del check-in)
+// Datos del selector de visitas: no cargar fotos ni otros campos de la ficha.
 export const getCompanyPersonsByCompany = async (req: Request, res: Response) => {
     try {
         const { company_id } = req.params
         const persons = await CompanyPerson.findAll({
+            attributes: ['id', 'name', 'document_number'],
             where: { company_id: +company_id },
             order: [['name', 'ASC']],
+            raw: true,
         })
         return res.status(200).json({ data: persons })
     } catch (error) {

@@ -1,4 +1,4 @@
-import colors from "colors"
+import { blue, bgRed } from "colors"
 import db from "../config/db"
 import { runSeeders } from "./seeder"
 
@@ -10,9 +10,10 @@ export async function connectDB() {
         await db.query('ALTER TABLE visit_companions ALTER COLUMN companion_id DROP NOT NULL').catch(() => {})
         await db.query('ALTER TABLE delivery_equipment_transaction ALTER COLUMN delivery_photo_url TYPE TEXT').catch(() => {})
         await runSeeders()
-        console.log(colors.blue("Successfully connection to the database"))
+        console.log(blue("Successfully connection to the database"))
     } catch (error) {
         console.log(error)
-        console.log(colors.bgRed.white("There was an error connecting to the database"))
+        console.log(bgRed.white("There was an error connecting to the database"))
+        throw error
     }
 }

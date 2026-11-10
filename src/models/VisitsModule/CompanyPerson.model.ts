@@ -3,7 +3,11 @@ import Company from "./Company.model";
 import VisitCompanion from "./VisitCompanion.model";
 
 @Table({
-    tableName: 'company_person'
+    tableName: 'company_person',
+    indexes: [
+        // company_id se almacena en la columna legada visitor_id.
+        { name: 'company_person_company_name_idx', fields: ['visitor_id', 'name'] },
+    ],
 })
 
 export default class CompanyPerson extends Model {
