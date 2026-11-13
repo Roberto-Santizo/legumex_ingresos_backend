@@ -173,7 +173,8 @@ export const getVisits = async (req: Request, res: Response) => {
                 .filter((id): id is number => id !== undefined)
 
             if (excludedIds.length > 0) {
-                where.visit_status_id = { [Op.notIn]: excludedIds }
+                // Combinar ambos filtros sin reemplazar el estado solicitado.
+                where[Op.and] = [{ visit_status_id: { [Op.notIn]: excludedIds } }]
             }
         }
 

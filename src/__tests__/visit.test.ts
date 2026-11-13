@@ -210,6 +210,38 @@ describe('getVisits', () => {
         const callArgs = (Visit.findAndCountAll as jest.Mock).mock.calls[0][0]
         expect(callArgs.where).toHaveProperty('visit_status_id', 1)
     })
+
+    it('excludes finalized visits in the database before pagination', async () => {
+        ;(VisitStatus.findOne as jest.Mock).mockImplementation(({ where }) =>
+            Promise.resolve(where.name === 'FINALIZADA' ? { id: 3 } : null)
+        )
+        ;(Visit.findAndCountAll as jest.Mock).mockResolvedValue({ count: 0, rows: [] })
+        const r = res()
+
+        await getVisits(req({ query: { exclude_status: 'FINALIZADA', page: '2' } }) as Request, r as unknown as Response)
+
+        const { where, limit, offset } = (Visit.findAndCountAll as jest.Mock).mock.calls[0][0]
+        expect(where[Op.and]).toEqual([{ visit_status_id: { [Op.notIn]: [3] } }])
+        expect(limit).toBe(10)
+        expect(offset).toBe(10)
+        expect(r.status).toHaveBeenCalledWith(200)
+    })
+
+    it('keeps the requested status when excluding finalized visits', async () => {
+        ;(VisitStatus.findOne as jest.Mock).mockImplementation(({ where }) =>
+            Promise.resolve({ id: where.name === 'FINALIZADA' ? 3 : 1 })
+        )
+        ;(Visit.findAndCountAll as jest.Mock).mockResolvedValue({ count: 0, rows: [] })
+        const r = res()
+
+        await getVisits(req({ query: {
+            status: 'PROGRAMADA', exclude_status: 'FINALIZADA',
+        } }) as Request, r as unknown as Response)
+
+        const { where } = (Visit.findAndCountAll as jest.Mock).mock.calls[0][0]
+        expect(where.visit_status_id).toBe(1)
+        expect(where[Op.and]).toEqual([{ visit_status_id: { [Op.notIn]: [3] } }])
+    })
 })
 
 // ── getVisitById ───────────────────────────────────────────────────────────────

@@ -162,7 +162,8 @@ const getVisits = async (req, res) => {
             const excludedIds = (await Promise.all(excludedNames.map(resolveStatusId)))
                 .filter((id) => id !== undefined);
             if (excludedIds.length > 0) {
-                where.visit_status_id = { [sequelize_1.Op.notIn]: excludedIds };
+                // Combinar ambos filtros sin reemplazar el estado solicitado.
+                where[sequelize_1.Op.and] = [{ visit_status_id: { [sequelize_1.Op.notIn]: excludedIds } }];
             }
         }
         // Si no tiene visits:view:all, solo ve las visitas que él creó
